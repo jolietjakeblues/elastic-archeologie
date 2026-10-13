@@ -75,7 +75,7 @@ npm run test:live
 
 ## Deployment
 
-Een Cloudflare Worker die alleen de statische bestanden uit `web/` serveert (`wrangler.jsonc`, naam `archeologie-sdo-elastic-demo`):
+Een Cloudflare Worker die alleen de statische bestanden uit `web/` serveert (`wrangler.jsonc`, naam `elastic-archeologie`), online op <https://elastic-archeologie.jolietjakeblues64.workers.dev/>. De repository is gekoppeld via Workers Builds: elke push naar `main` wordt automatisch gepubliceerd, andere branches krijgen een preview-URL. Handmatig:
 
 ```bash
 npx wrangler deploy
