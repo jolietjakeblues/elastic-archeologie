@@ -1,0 +1,50 @@
+PREFIX ceo: <https://linkeddata.cultureelerfgoed.nl/def/ceo#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX schema: <https://schema.org/>
+PREFIX graph: <https://linkeddata.cultureelerfgoed.nl/graph/>
+
+# ceo:Vondsten -> schema:CreativeWork (446.665 objecten)
+# Door de mens gemaakt artefact. Ligt altijd in een vondstlocatie; de vindplek is niet
+# per se de plek van vervaardiging, daarom schema:spatialCoverage en niet locationCreated.
+# Vertrouwelijkheid komt van de vondstlocatie.
+# Plat: alleen het object zelf als subject. schema:identifier is de CHOI;
+# het Archis-vondstnummer staat als tekst in schema:alternateName, het aantal in schema:materialExtent,
+# de toestand (fragment, compleet) in schema:itemCondition.
+
+CONSTRUCT {
+    ?vondst_uri a schema:CreativeWork ;
+        schema:additionalType ?type_uri ;
+        schema:name ?typenaam ;
+        schema:identifier ?choi ;
+        schema:alternateName ?archis ;
+        schema:description ?omschrijving ;
+        schema:material ?materiaal ;
+        schema:genre ?stijl ;
+        schema:temporalCoverage ?periode ;
+        schema:materialExtent ?aantal ;
+        schema:itemCondition ?toestand ;
+        schema:conditionsOfAccess ?vertrouwelijk ;
+        schema:spatialCoverage ?vondstlocatie_uri .
+}
+WHERE {
+    GRAPH graph:instanties-rce {
+        ?vondst_uri a ceo:Vondsten ;
+            ceo:cultuurhistorischObjectnummer ?choi ;
+            ceo:aantalVondsten ?aantal ;
+            ceo:ligtInObject ?vondstlocatie_uri .
+
+        OPTIONAL { ?vondst_uri ceo:archis2Vondstnummer ?vondstnummer .
+                   BIND(CONCAT("vondstnummer ", ?vondstnummer) AS ?archis) }
+        OPTIONAL { ?vondst_uri ceo:heeftType/ceo:heeftTypeNaam ?type_uri .
+                   ?type_uri skos:prefLabel ?typenaam }
+        OPTIONAL { ?vondst_uri ceo:heeftMateriaal/ceo:heeftMateriaalNaam/skos:prefLabel ?materiaal }
+        OPTIONAL { ?vondst_uri ceo:heeftStijlEnCultuur/ceo:heeftStijlEnCultuurNaam/skos:prefLabel ?stijl }
+        OPTIONAL { ?vondst_uri ceo:heeftToestand/skos:prefLabel ?toestand }
+        OPTIONAL { ?vondst_uri ceo:heeftOmschrijving/ceo:omschrijving ?omschrijving }
+        OPTIONAL { ?vondst_uri ceo:heeftGebeurtenis/ceo:heeftDatering ?datering_ .
+                   ?datering_ ceo:heeftBeginDatering/ceo:heeftPeriode/skos:prefLabel ?begin ;
+                              ceo:heeftEindDatering/ceo:heeftPeriode/skos:prefLabel ?eind .
+                   BIND(IF(?begin = ?eind, ?begin, CONCAT(?begin, " - ", ?eind)) AS ?periode) }
+        OPTIONAL { ?vondstlocatie_uri ceo:heeftVertrouwelijkAanduiding/skos:prefLabel ?vertrouwelijk }
+    }
+}

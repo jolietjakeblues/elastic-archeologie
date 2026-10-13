@@ -1,0 +1,43 @@
+PREFIX ceo: <https://linkeddata.cultureelerfgoed.nl/def/ceo#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX schema: <https://schema.org/>
+PREFIX graph: <https://linkeddata.cultureelerfgoed.nl/graph/>
+
+# ceo:ArcheologischComplex -> schema:Place (360.375 objecten)
+# Ligt in een vondstlocatie, archeologisch terrein of onderzoeksgebied.
+# Geen eigen geometrie. Vertrouwelijkheid: eigen aanduiding, anders die van het bovenliggende object.
+# Formeel standpunt staat bij de meeste omschrijvingen op false; daarom geen filter daarop.
+# Plat: alleen het object zelf als subject. schema:identifier is de CHOI;
+# het Archis-complexnummer staat als tekst in schema:alternateName.
+
+CONSTRUCT {
+    ?complex_uri a schema:Place ;
+        schema:additionalType ?type_uri ;
+        schema:name ?typenaam ;
+        schema:identifier ?choi ;
+        schema:alternateName ?archis ;
+        schema:description ?omschrijving ;
+        schema:temporalCoverage ?periode ;
+        schema:conditionsOfAccess ?vertrouwelijk ;
+        schema:containedInPlace ?ligt_in .
+}
+WHERE {
+    GRAPH graph:instanties-rce {
+        ?complex_uri a ceo:ArcheologischComplex ;
+            ceo:cultuurhistorischObjectnummer ?choi .
+
+        OPTIONAL { ?complex_uri ceo:archis2Complexnummer ?complexnummer .
+                   BIND(CONCAT("complexnummer ", ?complexnummer) AS ?archis) }
+        OPTIONAL { ?complex_uri ceo:heeftType/ceo:heeftTypeNaam ?type_uri .
+                   ?type_uri skos:prefLabel ?typenaam }
+        OPTIONAL { ?complex_uri ceo:heeftOmschrijving/ceo:omschrijving ?omschrijving }
+        OPTIONAL { ?complex_uri ceo:heeftGebeurtenis/ceo:heeftDatering ?datering_ .
+                   ?datering_ ceo:heeftBeginDatering/ceo:heeftPeriode/skos:prefLabel ?begin ;
+                              ceo:heeftEindDatering/ceo:heeftPeriode/skos:prefLabel ?eind .
+                   BIND(IF(?begin = ?eind, ?begin, CONCAT(?begin, " - ", ?eind)) AS ?periode) }
+        OPTIONAL { ?complex_uri ceo:ligtInObject ?ligt_in .
+                   OPTIONAL { ?ligt_in ceo:heeftVertrouwelijkAanduiding/skos:prefLabel ?vertrouwelijk_ouder } }
+        OPTIONAL { ?complex_uri ceo:heeftVertrouwelijkAanduiding/skos:prefLabel ?vertrouwelijk_eigen }
+    }
+    BIND(COALESCE(?vertrouwelijk_eigen, ?vertrouwelijk_ouder) AS ?vertrouwelijk)
+}

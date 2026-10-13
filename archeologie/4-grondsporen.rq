@@ -1,0 +1,45 @@
+PREFIX ceo: <https://linkeddata.cultureelerfgoed.nl/def/ceo#>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX schema: <https://schema.org/>
+PREFIX graph: <https://linkeddata.cultureelerfgoed.nl/graph/>
+
+# ceo:Grondsporen -> schema:CreativeWork (92.613 objecten)
+# Door de mens gemaakt spoor (kuil, greppel, cultuurlaag). Ligt altijd in een vondstlocatie;
+# een spoor is gemaakt waar het gevonden is, dus schema:locationCreated.
+# Vertrouwelijkheid komt van de vondstlocatie.
+# Plat: alleen het object zelf als subject. schema:identifier is de CHOI;
+# het Archis-vondstnummer staat als tekst in schema:alternateName, het aantal in schema:materialExtent.
+
+CONSTRUCT {
+    ?grondspoor_uri a schema:CreativeWork ;
+        schema:additionalType ?type_uri ;
+        schema:name ?typenaam ;
+        schema:identifier ?choi ;
+        schema:alternateName ?archis ;
+        schema:description ?omschrijving ;
+        schema:genre ?stijl ;
+        schema:temporalCoverage ?periode ;
+        schema:materialExtent ?aantal ;
+        schema:conditionsOfAccess ?vertrouwelijk ;
+        schema:locationCreated ?vondstlocatie_uri .
+}
+WHERE {
+    GRAPH graph:instanties-rce {
+        ?grondspoor_uri a ceo:Grondsporen ;
+            ceo:cultuurhistorischObjectnummer ?choi ;
+            ceo:aantalGrondsporen ?aantal ;
+            ceo:ligtInObject ?vondstlocatie_uri .
+
+        OPTIONAL { ?grondspoor_uri ceo:archis2Vondstnummer ?vondstnummer .
+                   BIND(CONCAT("vondstnummer ", ?vondstnummer) AS ?archis) }
+        OPTIONAL { ?grondspoor_uri ceo:heeftType/ceo:heeftTypeNaam ?type_uri .
+                   ?type_uri skos:prefLabel ?typenaam }
+        OPTIONAL { ?grondspoor_uri ceo:heeftOmschrijving/ceo:omschrijving ?omschrijving }
+        OPTIONAL { ?grondspoor_uri ceo:heeftStijlEnCultuur/ceo:heeftStijlEnCultuurNaam/skos:prefLabel ?stijl }
+        OPTIONAL { ?grondspoor_uri ceo:heeftGebeurtenis/ceo:heeftDatering ?datering_ .
+                   ?datering_ ceo:heeftBeginDatering/ceo:heeftPeriode/skos:prefLabel ?begin ;
+                              ceo:heeftEindDatering/ceo:heeftPeriode/skos:prefLabel ?eind .
+                   BIND(IF(?begin = ?eind, ?begin, CONCAT(?begin, " - ", ?eind)) AS ?periode) }
+        OPTIONAL { ?vondstlocatie_uri ceo:heeftVertrouwelijkAanduiding/skos:prefLabel ?vertrouwelijk }
+    }
+}

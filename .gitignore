@@ -1,0 +1,6 @@
+# Editor/IDE config
+.claude/
+
+# Wrangler/Node
+.wrangler/
+node_modules/
