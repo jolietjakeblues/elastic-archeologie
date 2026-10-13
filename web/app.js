@@ -20,6 +20,8 @@ const format = number => new Intl.NumberFormat('nl-NL').format(number);
 const decode = text => (/&[#\w]+;/.test(text) ? new DOMParser().parseFromString(text, 'text/html').body.textContent : text);
 const show = value => decode(textValue(value));
 const soortLabel = soort => soorten[soort] ?? extern[soort] ?? 'Object';
+const meervoud = { archeologischonderzoeksgebied: ['onderzoeksgebied', 'onderzoeksgebieden'], vondstlocatie: ['vondstlocatie', 'vondstlocaties'], archeologischterrein: ['archeologisch terrein', 'archeologische terreinen'], archeologischcomplex: ['archeologisch complex', 'archeologische complexen'], grondsporen: ['grondspoor', 'grondsporen'], vondsten: ['vondst', 'vondsten'] };
+const aantalSoort = (soort, count) => `${format(count)} ${(meervoud[soort] ?? [soort, soort])[count === 1 ? 0 : 1]}`;
 function el(tag, text, className) { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; }
 function button(text, callback, className) { const node = el('button', text, className); node.type = 'button'; node.addEventListener('click', callback); return node; }
 function link(text, url) { const node = el('a', text); node.href = url; node.target = '_blank'; node.rel = 'noopener noreferrer'; return node; }
@@ -135,7 +137,7 @@ async function loadRelations(hits, signal) {
     if (ouders.length) slot.append(relationRow('Ligt in:', ouders.slice(0, 5).map(objectButton).concat(ouders.length > 5 ? [el('span', `en ${ouders.length - 5} meer`)] : [])));
     if (MET_INHOUD.includes(soort) && nummer) {
       const counts = inhoud.get(source['@id']);
-      const parts = counts ? Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([key, count]) => `${format(count)} ${(soorten[key] ?? key).toLowerCase()}`) : [];
+      const parts = counts ? Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([key, count]) => aantalSoort(key, count)) : [];
       slot.append(relationRow('Bevat:', parts.length ? [document.createTextNode(`${parts.join(', ')} `), button('Toon wat erin ligt', () => openBinnen(`${soort}:${nummer}`), 'relation-button')] : [el('span', 'geen objecten in deze index')]));
     }
   }

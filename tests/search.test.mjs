@@ -49,10 +49,12 @@ test('Binnen een object: via de drie relatievelden; in de buurt via geo_distance
 test('Relaties: ouders op URI, inhoud per object en soort in één request', () => {
   const vl = `${BASE}vondstlocatie/1`, og = `${BASE}archeologischonderzoeksgebied/2`;
   const body = buildRelationQuery([og], [vl]);
-  assert.deepEqual(body.query, { terms: { '@id.keyword': [og] } });
+  assert.deepEqual(body.post_filter, { terms: { '@id.keyword': [og] } });
+  assert.deepEqual(body.query.bool.should[0], body.post_filter);
+  assert.deepEqual(body.query.bool.should[1], { terms: { [`${fields.containedInPlace}.keyword`]: [vl] } }, 'de aggregations moeten ook de inhoud zien');
   assert.equal(Object.keys(body.aggs).length, 3);
   assert.deepEqual(body.aggs.in1.aggs.ouders.terms.include, [vl]);
-  assert.deepEqual(buildRelationQuery([], []).query.terms['@id.keyword'], ['-']);
+  assert.deepEqual(buildRelationQuery([], []).post_filter.terms['@id.keyword'], ['-']);
   const inhoud = inhoudVan({
     in0: { ouders: { buckets: [{ key: vl, soort: { buckets: [{ key: 'archeologischcomplex', doc_count: 2 }] } }] } },
     in1: { ouders: { buckets: [{ key: vl, soort: { buckets: [{ key: 'grondsporen', doc_count: 1 }] } }] } },

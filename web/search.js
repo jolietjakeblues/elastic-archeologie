@@ -124,10 +124,14 @@ export function bucketsOf(aggregation) {
 // - per object hoeveel er in ligt, per soort (aggregation op de drie relatievelden, alleen voor deze URI's).
 export function buildRelationQuery(parents, containers) {
   const list = items => (items.length ? items : ['-']);
+  const parentClause = { terms: { '@id.keyword': list(parents) } };
   return {
     size: Math.min(parents.length, 100), timeout: '15s',
     _source: ['@id', fields.identifier, fields.name],
-    query: { terms: { '@id.keyword': list(parents) } },
+    // Aggregations tellen binnen de query: die moet dus ook alles vinden wat in de containers ligt.
+    // De hits zelf zijn alleen de ouders (post_filter).
+    query: { bool: { should: [parentClause, ...PARENT_FIELDS.map(field => ({ terms: { [`${field}.keyword`]: list(containers) } }))], minimum_should_match: 1 } },
+    post_filter: parentClause,
     aggs: Object.fromEntries(PARENT_FIELDS.map((field, index) => [`in${index}`, {
       filter: { terms: { [`${field}.keyword`]: list(containers) } },
       aggs: { ouders: { terms: { field: `${field}.keyword`, include: list(containers), size: containers.length || 1 }, aggs: { soort: { terms: { field: SOORT_FIELD, size: 10 } } } } }
