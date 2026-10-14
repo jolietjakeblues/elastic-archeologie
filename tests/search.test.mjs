@@ -20,7 +20,9 @@ test('Standaard zonder vondsten en grondsporen, behalve met soortfilter of binne
   assert.deepEqual(buildQuery({ filters: { soort: ['vondsten'] } }).post_filter.bool.filter, [{ terms: { '@id.soort': ['vondsten'] } }]);
   const binnen = buildQuery({ binnen: 'vondstlocatie:6129412' }, { clause: insideClause(`${BASE}vondstlocatie/6129412`) });
   assert.deepEqual(binnen.post_filter.bool.filter, []);
-  assert.match(describe({}).join(' '), /Vondsten en grondsporen worden niet getoond/);
+  assert.match(describe({}).join(' '), /vondsten en grondsporen niet getoond/);
+  assert.deepEqual(buildQuery({ query: 'zwaard' }).post_filter.bool.filter, [], 'met een zoekvraag geen standaardfilter: zoeken op zwaard vindt de vondsten');
+  assert.doesNotMatch(describe({ query: 'zwaard' }).join(' '), /niet getoond/);
   assert.doesNotMatch(describe({ filters: { soort: ['vondsten'] } }).join(' '), /niet getoond/);
 });
 test('Soort: filter, facet en URI', () => {

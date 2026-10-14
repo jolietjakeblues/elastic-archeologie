@@ -17,8 +17,9 @@ export const soorten = { archeologischonderzoeksgebied: 'Onderzoeksgebied', vond
 // Objecten buiten deze index waarnaar verwezen kan worden (een terrein ligt in een rijksmonument uit erfgoed-sdo).
 export const extern = { rijksmonument: 'Rijksmonument' };
 export const soortVan = uri => /\/id\/([a-z]+)\//.exec(String(uri ?? ''))?.[1] ?? null;
-// Vondsten en grondsporen zijn samen ca. 540.000 van de 1,1 miljoen objecten. Zonder soortfilter en buiten een
-// context worden ze daarom niet getoond; in de soortfacet blijven ze zichtbaar en aan te vinken.
+// Vondsten en grondsporen zijn samen ca. 540.000 van de 1,1 miljoen objecten. Bij bladeren (geen zoekvraag, geen
+// soortfilter, geen context) worden ze daarom niet getoond; in de soortfacet blijven ze zichtbaar en aan te vinken.
+// Met een zoekvraag worden ze wel getoond: wie op "zwaard" zoekt, zoekt vooral vondsten.
 export const VERBORGEN = ['vondsten', 'grondsporen'];
 export const STANDAARD_SOORTEN = Object.keys(soorten).filter(soort => !VERBORGEN.includes(soort));
 // @id.soort is een keyword-subveld uit de index template (triply/elastic-service-archeologie.json): de soort uit de URI.
@@ -90,11 +91,11 @@ function clauseFor(key, list) {
   if (key === 'soort') return { terms: { [SOORT_FIELD]: list } };
   return { terms: { [`${fields[key]}.keyword`]: list } };
 }
-// Zonder soortfilter en zonder context: de standaardsoorten (dus zonder vondsten en grondsporen).
-export const verbergt = ({ filters = {}, binnen = null }) => !binnen && !filters.soort?.length;
-function filterClauses(filters, skip, binnen) {
+// Zonder zoekvraag, soortfilter en context: de standaardsoorten (dus zonder vondsten en grondsporen).
+export const verbergt = ({ query = '', filters = {}, binnen = null }) => !String(query).trim() && !binnen && !filters.soort?.length;
+function filterClauses(filters, skip, verberg) {
   const clauses = Object.entries(filters).filter(([key, list]) => key !== skip && list.length).map(([key, list]) => clauseFor(key, list));
-  if (skip !== 'soort' && verbergt({ filters, binnen })) clauses.push(clauseFor('soort', STANDAARD_SOORTEN));
+  if (skip !== 'soort' && verberg) clauses.push(clauseFor('soort', STANDAARD_SOORTEN));
   return clauses;
 }
 function validate({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null }, context) {
@@ -116,10 +117,10 @@ function validate({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, s
   // Context (binnen) en jaartal gaan in de query: ze beperken ook de facetten en de totalen.
   const filter = [binnen && context.clause, jaar && jaarClause(jaar)].filter(Boolean);
   const search = filter.length ? { bool: { must: [text], filter } } : text;
-  return { search, filters: clean, field, page, sort, binnen };
+  return { search, filters: clean, field, page, sort, binnen, verberg: verbergt({ query, filters: clean, binnen }) };
 }
-const facetAggs = (filters, binnen) => Object.fromEntries(Object.keys(facets).map(key => [key, {
-  filter: { bool: { filter: filterClauses(filters, key, binnen) } },
+const facetAggs = (filters, verberg) => Object.fromEntries(Object.keys(facets).map(key => [key, {
+  filter: { bool: { filter: filterClauses(filters, key, verberg) } },
   aggs: { values: key === 'soort'
     ? { terms: { field: SOORT_FIELD, size: 20 } }
     : { terms: { field: `${fields[key]}.keyword`, size: 100, show_term_doc_count_error: true } } }
@@ -128,16 +129,16 @@ const facetAggs = (filters, binnen) => Object.fromEntries(Object.keys(facets).ma
 // facetten, zodat je binnen een facet meerdere waarden kunt aanvinken.
 // context = { clause } voor "binnen"; die beperkt ook de facetten.
 export function buildQuery(state = {}, context) {
-  const { search, filters, field, page, sort, binnen } = validate(state, context);
+  const { search, filters, field, page, sort, verberg } = validate(state, context);
   return {
     from: page * PAGE_SIZE, size: PAGE_SIZE, track_total_hits: true, timeout: '15s',
     _source: ['@id', ...Object.values(fields), WKT_FIELD],
     query: search,
-    post_filter: { bool: { filter: filterClauses(filters, null, binnen) } },
+    post_filter: { bool: { filter: filterClauses(filters, null, verberg) } },
     ...(sorts[sort].sort ? { sort: sorts[sort].sort } : {}),
     // Highlighting zonder ^3: daar is het gewicht geen deel van de veldnaam.
     highlight: { fields: Object.fromEntries(searchFields[field].map(key => [key, { fragment_size: 275, number_of_fragments: 3 }])), pre_tags: ['<mark>'], post_tags: ['</mark>'], encoder: 'html' },
-    aggs: facetAggs(filters, binnen)
+    aggs: facetAggs(filters, verberg)
   };
 }
 // Facetbuckets in één vorm.
@@ -180,11 +181,11 @@ export const erfgoedDemoUrl = nummer => `${ERFGOED_DEMO}?${new URLSearchParams({
 export const lookupQuery = (soort, nummer) => ({ size: 1, query: { bool: { filter: [{ term: { [SOORT_FIELD]: soort } }, { term: { [`${fields.identifier}.keyword`]: nummer } }] } }, _source: ['@id', fields.identifier, fields.name, WKT_FIELD] });
 // Export: dezelfde zoekvraag, filters en sortering, maximaal EXPORT_MAX resultaten, zonder geometrie, facets en highlights.
 export function buildExportQuery(state = {}, context) {
-  const { search, filters, sort, binnen } = validate({ ...state, page: 0 }, context);
+  const { search, filters, sort, verberg } = validate({ ...state, page: 0 }, context);
   return {
     from: 0, size: EXPORT_MAX, track_total_hits: true, timeout: '20s',
     _source: ['@id', ...Object.values(fields)],
-    query: { bool: { must: [search], filter: filterClauses(filters, null, binnen) } },
+    query: { bool: { must: [search], filter: filterClauses(filters, null, verberg) } },
     ...(sorts[sort].sort ? { sort: sorts[sort].sort } : {})
   };
 }
@@ -252,7 +253,7 @@ export function describe(state = {}, binnenLabel) {
   }
   if (binnen) lines.push(binnen.startsWith('rond:') ? `Alleen wat binnen ${binnenLabel ?? binnen} ligt.` : `Alleen wat ligt in ${binnenLabel ?? binnen}.`);
   if (jaar) lines.push(`Alleen objecten waarvan de datering ${JAARMODI[jaar.modus ?? 'overlapt']} valt in ${jaarBereik(jaar)} (jaartallen uit ABR).`);
-  if (verbergt({ filters, binnen })) lines.push('Vondsten en grondsporen worden niet getoond; vink ze aan bij Soort om ze mee te nemen.');
+  if (verbergt({ query, filters, binnen })) lines.push('Zonder zoekvraag worden vondsten en grondsporen niet getoond; vink ze aan bij Soort of zoek op een woord.');
   const active = Object.entries(filters).filter(([, list]) => list.length);
   if (active.length) lines.push(`Alleen objecten met ${active.map(([key, list]) => `${facets[key].toLowerCase()} ${list.map(value => filterValue(key, value)).join(' of ')}`).join(', en ')}.`);
   if (jokers) lines.push('Testmodus: een jokerteken aan het begin (bijv. *pot) is toegestaan.');

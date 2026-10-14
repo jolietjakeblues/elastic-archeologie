@@ -48,7 +48,7 @@ Templates worden alleen bij het aanmaken gelezen; een wijziging betekent de serv
 
 ## Wat de demo doet
 
-- **Standaard zonder vondsten en grondsporen.** Samen ca. 540.000 van de 1,1 miljoen objecten; anders bepalen ze elk resultaat. Zonder soortfilter en zonder gekozen object staat in `post_filter` een `terms` op `@id.soort` met de andere vier soorten. De soortfacet telt zonder dat filter.
+- **Bladeren zonder vondsten en grondsporen.** Samen ca. 540.000 van de 1,1 miljoen objecten; anders bestaat het overzicht vooral uit losse vondsten. Met een zoekvraag worden ze wel getoond (wie op "zwaard" zoekt, zoekt vooral vondsten). Zonder zoekvraag, soortfilter en gekozen object staat in `post_filter` een `terms` op `@id.soort` met de andere vier soorten. De soortfacet telt zonder dat filter.
 - **Ligt in** bij elk resultaat: het object uit `containedInPlace`, `locationCreated` of `spatialCoverage`. Vondsten, grondsporen en complexen in een vondstlocatie tonen ook het **Onderzoeksgebied** (`isPartOf`).
 - **Rijksmonument** (waarin een terrein ligt): staat in `erfgoed-sdo`. Nummer en naam komen met een tweede request uit de service `Erfgoed-sdo-nl3`; de link opent het monument in de [erfgoeddemo](https://erfgoed-sdo-elastic-demo.jolietjakeblues64.workers.dev/).
 - **Bevat** bij een onderzoeksgebied, vondstlocatie of terrein: hoeveel objecten erin liggen, per soort, met **Toon wat erin ligt** (`binnen=vondstlocatie:6129412`). Bij een onderzoeksgebied zijn dat alle niveaus: vondstlocaties, en via `isPartOf` ook de vondsten, grondsporen en complexen daarin. Dat is één extra request voor de hele pagina: een `filters`-aggregation met per object dezelfde clause als **Toon wat erin ligt**, zodat een object één keer telt.
