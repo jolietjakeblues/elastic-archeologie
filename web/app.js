@@ -1,9 +1,9 @@
-import { buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, erfgoedQuery, erfgoedDemoUrl, ERFGOED_ENDPOINT, lookupQuery, insideClause, nearClause, AFSTANDEN, MET_INHOUD, MET_LOCATIE, PARENT_FIELDS, VERBORGEN, verbergt, vertrouwelijk, bucketsOf, search, setService, DEFAULT_SERVICE, facets, fields, sorts, soorten, extern, soortVan, values, textValue, safeUrl, toParams, fromParams, describe, toCsv, DEFAULT_FIELD, PAGE_SIZE, MAX_WINDOW, EXPORT_MAX } from './search.js';
+import { jaarBereik, jaarTekst, JAAR_MIN, JAAR_MAX, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, erfgoedQuery, erfgoedDemoUrl, ERFGOED_ENDPOINT, lookupQuery, insideClause, nearClause, AFSTANDEN, MET_INHOUD, MET_LOCATIE, PARENT_FIELDS, VERBORGEN, verbergt, vertrouwelijk, bucketsOf, search, setService, DEFAULT_SERVICE, facets, fields, sorts, soorten, extern, soortVan, values, textValue, safeUrl, toParams, fromParams, describe, toCsv, DEFAULT_FIELD, PAGE_SIZE, MAX_WINDOW, EXPORT_MAX } from './search.js';
 import { geometryFor } from './geo.js';
 const $ = id => document.getElementById(id);
 // Testschakelaar: ?service=<naam> zoekt in een andere service van rce/archeologie-sdo.
 const service = setService(new URLSearchParams(location.search).get('service'));
-const blank = () => ({ query: '', field: DEFAULT_FIELD, filters: {}, page: 0, sort: 'relevantie', binnen: null, jokers: state?.jokers ?? false });
+const blank = () => ({ query: '', field: DEFAULT_FIELD, filters: {}, page: 0, sort: 'relevantie', binnen: null, jaar: null, jokers: state?.jokers ?? false });
 let state; state = blank();
 let controller, needsFit = false, lastTotal = 0;
 const cards = new Map(), markers = new Map(), shapes = new Map(), relationSlots = new Map();
@@ -55,9 +55,9 @@ function setBinnen(binnen, extra = {}) {
   window.scrollTo({ top: $('status').offsetTop - 16, behavior: 'smooth' });
 }
 // Eén object tonen via zijn nummer en soort (bijv. vanuit een relatie).
-const showObject = (soort, nummer) => setBinnen(null, { query: `"${nummer}"`, field: 'Nummer', filters: { soort: [soort] }, sort: 'relevantie' });
+const showObject = (soort, nummer) => setBinnen(null, { query: `"${nummer}"`, field: 'Nummer', filters: { soort: [soort] }, sort: 'relevantie', jaar: null });
 // Vanuit een resultaat naar wat erin ligt: met een schone zoekactie.
-const openBinnen = binnen => setBinnen(binnen, { query: '', field: DEFAULT_FIELD, filters: {} });
+const openBinnen = binnen => setBinnen(binnen, { query: '', field: DEFAULT_FIELD, filters: {}, jaar: null });
 
 function highlight(fragment) {
   const node = el('p', null, 'match');
@@ -74,7 +74,7 @@ function relationRow(label, items) {
   const row = el('div', null, 'relation'); row.append(el('span', label, 'relation-label'));
   const list = el('span', null, 'relation-items'); list.append(...items); row.append(list); return row;
 }
-const metadataFields = { alternateName: 'Archis', temporalCoverage: 'Periode', material: 'Materiaal', genre: 'Stijl en cultuur', materialExtent: 'Aantal', itemCondition: 'Toestand', category: 'Waardering', keywords: 'Kenmerken', addressLocality: 'Plaats', addressRegion: 'Provincie', conditionsOfAccess: 'Toegang' };
+const metadataFields = { alternateName: 'Archis', temporalCoverage: 'Periode', material: 'Materiaal', keywords: 'Typegroep of kenmerk', genre: 'Stijl en cultuur', materialExtent: 'Aantal', itemCondition: 'Toestand', category: 'Waardering', addressLocality: 'Plaats', addressRegion: 'Provincie', conditionsOfAccess: 'Toegang' };
 function renderResults(hits) {
   $('results').replaceChildren(); cards.clear(); relationSlots.clear();
   if (!hits.length) { $('results').append(el('p', 'Niets gevonden. Pas je zoekvraag aan of verwijder een filter.', 'empty')); return; }
@@ -87,7 +87,9 @@ function renderResults(hits) {
     card.append(head, el('h3', show(source[fields.name]) || `${soortLabel(soort)} zonder naam`));
     const metadata = el('dl', null, 'metadata');
     for (const [key, label] of Object.entries(metadataFields)) {
-      const text = show(source[fields[key]]); if (!text || (key === 'conditionsOfAccess' && text === 'openbaar')) continue;
+      let text = show(source[fields[key]]); if (!text || (key === 'conditionsOfAccess' && text === 'openbaar')) continue;
+      // Periode met de jaartallen uit ABR erbij, bijv. Romeinse Tijd (12 v. Chr. – 449 n. Chr.).
+      if (key === 'temporalCoverage') { const begin = Number(values(source[fields.startDate])[0]), eind = Number(values(source[fields.endDate])[0]); if (Number.isFinite(begin) && Number.isFinite(eind) && values(source[fields.startDate]).length) text += ` (${jaarTekst(begin)} – ${jaarTekst(eind)})`; }
       const row = el('div'); row.append(el('dt', `${label}:`), el('dd', text)); metadata.append(row);
     }
     // Een vondstlocatie of terrein heeft geen eigen geometrie; de demo leent die van het onderzoeksgebied of rijksmonument.
@@ -105,6 +107,8 @@ function renderResults(hits) {
     if (descriptions.length) { const detail = el('details'); detail.append(el('summary', 'Volledige omschrijving')); descriptions.forEach(text => detail.append(el('p', text, 'description'))); card.append(detail); }
     const links = el('div', null, 'links');
     for (const raw of values(source['@id'])) { const url = safeUrl(raw); if (url) { links.append(link('Linked Data', url)); const uri = el('p', null, 'uri'); uri.append(link(raw, url)); card.append(uri); } }
+    // Het ABR-begrip van het type (vondsten, grondsporen, complexen).
+    for (const raw of values(source[fields.sameAs])) { const url = safeUrl(raw); if (url && url.startsWith('https://data.cultureelerfgoed.nl/term/id/abr/')) links.append(link('ABR-begrip', url)); }
     if (map && geometryFor(source)) links.append(button('Toon op kaart', () => select(hit._id, true)));
     if (geometryFor(source) && nummer && MET_LOCATIE.includes(soort)) links.append(button('In de buurt', () => openBinnen(`rond:${soort}:${nummer}:500`)));
     card.append(links); $('results').append(card);
@@ -144,7 +148,8 @@ async function loadRelations(hits, signal) {
     }
     const source = byUri.get(uri), nummer = source && values(source[fields.identifier])[0];
     if (!source) { const url = safeUrl(uri); return url ? link(`${soortLabel(soort)} (Linked Data)`, url) : el('span', uri); }
-    const text = `${soortLabel(soort)} ${nummer ?? ''}${show(source[fields.name]) ? ` ${show(source[fields.name])}` : ''}`.trim();
+    // Een naam "-" (komt in de bron voor) is geen naam.
+    const naam = show(source[fields.name]), text = `${soortLabel(soort)} ${nummer ?? ''}${naam && naam !== '-' ? ` ${naam}` : ''}`.trim();
     return nummer ? button(text, () => showObject(soort, nummer), 'relation-button') : el('span', text);
   };
   const rij = (label, uris) => relationRow(label, uris.slice(0, 5).map(objectButton).concat(uris.length > 5 ? [el('span', `en ${uris.length - 5} meer`)] : []));
@@ -245,11 +250,15 @@ function renderFilters(aggregations, context) {
     const chip = button(`Binnen: ${context?.label ?? state.binnen} ×`, () => setBinnen(null)); chip.className = 'chip-binnen';
     chip.setAttribute('aria-label', `Verwijder ${context?.label ?? state.binnen}`); $('active-filters').append(chip);
   }
+  if (state.jaar) {
+    const chip = button(`Datering: ${state.jaar.modus === 'binnen' ? 'helemaal' : '(deels)'} in ${jaarBereik(state.jaar).replace(/^de periode /, '')} ×`, () => { state.jaar = null; state.page = 0; syncForm(); run(); });
+    chip.setAttribute('aria-label', 'Verwijder het filter op datering'); $('active-filters').append(chip);
+  }
   for (const [key, list] of Object.entries(state.filters)) for (const value of list) {
     const chip = button(`${facets[key]}: ${valueLabel(key, value)} ×`, () => toggleFilter(key, value));
     chip.setAttribute('aria-label', `Verwijder filter ${facets[key]}: ${valueLabel(key, value)}`); $('active-filters').append(chip);
   }
-  if (Object.keys(state.filters).length || state.binnen) $('active-filters').append(button('Wis alle filters', () => { state.filters = {}; state.binnen = null; state.page = 0; syncForm(); run(); }));
+  if (Object.keys(state.filters).length || state.binnen || state.jaar) $('active-filters').append(button('Wis alle filters', () => { state.filters = {}; state.binnen = null; state.jaar = null; state.page = 0; syncForm(); run(); }));
   // Standaard zonder vondsten en grondsporen: maak dat zichtbaar en omkeerbaar.
   if (verbergt(state)) $('active-filters').append(el('span', 'Zonder vondsten en grondsporen.', 'hint'), button('Toon alle soorten', () => { state.filters.soort = Object.keys(soorten); state.page = 0; run(); }, 'link-button'));
   $('facets').replaceChildren();
@@ -279,7 +288,18 @@ function renderFilters(aggregations, context) {
   }
 }
 // Zoekformulier, URL en uitleg volgen de state.
-function syncForm() { $('query').value = state.query; $('field').value = state.field; $('sort').value = state.sort; checkQuery(); }
+function syncForm() {
+  $('query').value = state.query; $('field').value = state.field; $('sort').value = state.sort; checkQuery();
+  $('van').value = state.jaar?.van ?? ''; $('tot').value = state.jaar?.tot ?? ''; $('jaarmodus').value = state.jaar?.modus ?? 'overlapt';
+}
+// Datering uit het formulier; null als beide velden leeg zijn. Gooit een fout bij een ongeldig jaartal.
+function readJaar() {
+  const read = id => { const raw = $(id).value.trim(); if (!raw) return null; const value = Number(raw); if (!Number.isInteger(value) || value < JAAR_MIN || value > JAAR_MAX) throw new Error(`Vul bij ${id === 'van' ? 'Van' : 'tot'} een heel jaartal in (negatief is v. Chr.).`); return value; };
+  const van = read('van'), tot = read('tot');
+  if (van == null && tot == null) return null;
+  if (van != null && tot != null && van > tot) throw new Error('Het jaartal bij Van moet vóór het jaartal bij tot liggen.');
+  return { van, tot, modus: $('jaarmodus').value === 'binnen' ? 'binnen' : 'overlapt' };
+}
 function syncUrl(mode) {
   const params = toParams(state);
   if (service !== DEFAULT_SERVICE) params.set('service', service);
@@ -362,6 +382,7 @@ function reset() {
 $('reset').addEventListener('click', reset);
 $('search-form').addEventListener('submit', event => {
   event.preventDefault();
+  try { state.jaar = readJaar(); } catch (error) { $('error').textContent = error.message; $('error').hidden = false; $('van').focus(); return; }
   state.query = $('query').value; state.field = $('field').value; state.page = 0;
   syncForm(); run();
 });
@@ -371,7 +392,9 @@ document.querySelectorAll('[data-example]').forEach(node => node.addEventListene
   const filters = {};
   if (node.dataset.soort) filters.soort = node.dataset.soort.split(',');
   if (node.dataset.periode) filters.temporalCoverage = [node.dataset.periode];
-  Object.assign(state, { query: node.dataset.example, field: DEFAULT_FIELD, page: 0, binnen: node.dataset.binnen ?? null, filters });
+  if (node.dataset.groep) filters.material = [node.dataset.groep];
+  const jaar = node.dataset.van || node.dataset.tot ? { van: node.dataset.van ? Number(node.dataset.van) : null, tot: node.dataset.tot ? Number(node.dataset.tot) : null, modus: node.dataset.jaarmodus === 'binnen' ? 'binnen' : 'overlapt' } : null;
+  Object.assign(state, { query: node.dataset.example, field: DEFAULT_FIELD, page: 0, binnen: node.dataset.binnen ?? null, filters, jaar });
   syncForm(); run();
 }));
 $('help-open').addEventListener('click', () => $('help').showModal());

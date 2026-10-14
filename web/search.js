@@ -11,7 +11,7 @@ export const MAX_WINDOW = 10000;
 export const EXPORT_MAX = 1000;
 const MAX_VALUES = 20;
 export const BASE = 'https://linkeddata.cultureelerfgoed.nl/cho-kennis/id/';
-export const fields = Object.fromEntries(['description', 'name', 'alternateName', 'addressLocality', 'addressRegion', 'category', 'additionalType', 'identifier', 'temporalCoverage', 'material', 'genre', 'materialExtent', 'itemCondition', 'conditionsOfAccess', 'keywords', 'containedInPlace', 'locationCreated', 'spatialCoverage', 'isPartOf'].map(key => [key, `https://schema org/${key}`]));
+export const fields = Object.fromEntries(['description', 'name', 'alternateName', 'addressLocality', 'addressRegion', 'category', 'additionalType', 'identifier', 'temporalCoverage', 'material', 'genre', 'materialExtent', 'itemCondition', 'conditionsOfAccess', 'keywords', 'containedInPlace', 'locationCreated', 'spatialCoverage', 'isPartOf', 'sameAs', 'startDate', 'endDate'].map(key => [key, `https://schema org/${key}`]));
 // De soort staat alleen in de URI: …/id/vondstlocatie/…, …/id/vondsten/… enzovoort.
 export const soorten = { archeologischonderzoeksgebied: 'Onderzoeksgebied', vondstlocatie: 'Vondstlocatie', archeologischterrein: 'Archeologisch terrein', archeologischcomplex: 'Archeologisch complex', grondsporen: 'Grondspoor', vondsten: 'Vondst' };
 // Objecten buiten deze index waarnaar verwezen kan worden (een terrein ligt in een rijksmonument uit erfgoed-sdo).
@@ -47,13 +47,14 @@ const weighted = key => WEIGHTED.some(base => key === base || key === `${base}.e
 export function queryFields(field) {
   return field === 'Alles' || field === 'Exact' ? searchFields[field].map(key => (weighted(key) ? `${key}^${WEIGHT}` : key)) : searchFields[field];
 }
-export const facets = { soort: 'Soort', name: 'Naam of type', temporalCoverage: 'Periode', material: 'Materiaal', genre: 'Stijl en cultuur', category: 'Waardering', addressRegion: 'Provincie', addressLocality: 'Plaats', conditionsOfAccess: 'Toegang' };
+export const facets = { soort: 'Soort', name: 'Naam of type', keywords: 'Typegroep (ABR) of kenmerk', temporalCoverage: 'Periode', material: 'Materiaal (met groepen)', genre: 'Stijl en cultuur', category: 'Waardering', addressRegion: 'Provincie', addressLocality: 'Plaats', conditionsOfAccess: 'Toegang' };
 // Sorteren op nummer gebruikt identifier.getal (long); het gewone veld is tekst, dan komt 5 na 10040.
 export const sorts = {
   relevantie: { label: 'Relevantie', sort: null },
   naam: { label: 'Naam of type (A–Z)', sort: [{ [`${fields.name}.keyword`]: { order: 'asc', missing: '_last' } }, '_score'] },
   plaats: { label: 'Plaats (A–Z)', sort: [{ [`${fields.addressLocality}.keyword`]: { order: 'asc', missing: '_last' } }, { [`${fields.name}.keyword`]: { order: 'asc', missing: '_last' } }] },
-  periode: { label: 'Periode (A–Z)', sort: [{ [`${fields.temporalCoverage}.keyword`]: { order: 'asc', missing: '_last' } }, '_score'] },
+  // Chronologisch op het beginjaar uit ABR (startDate.getal, long), dan het eindjaar; zonder datering achteraan.
+  periode: { label: 'Periode (oud → jong)', sort: [{ [`${fields.startDate}.getal`]: { order: 'asc', missing: '_last' } }, { [`${fields.endDate}.getal`]: { order: 'asc', missing: '_last' } }] },
   soort: { label: 'Soort', sort: [{ '@id.keyword': { order: 'asc' } }] },
   nummer: { label: 'Nummer', sort: [{ [`${fields.identifier}.getal`]: { order: 'asc', missing: '_last' } }] }
 };
@@ -69,6 +70,21 @@ export const BINNEN = new RegExp(`^((${MET_INHOUD.join('|')}):\\d{1,10}|rond:(${
 const notItself = uri => [{ term: { '@id.keyword': uri } }];
 export const insideClause = uri => ({ bool: { should: INSIDE_FIELDS.map(field => ({ term: { [`${field}.keyword`]: uri } })), minimum_should_match: 1 } });
 export const nearClause = ({ lat, lon }, meters, uri) => ({ bool: { filter: [{ geo_distance: { distance: `${meters}m`, [WKT_FIELD]: { lat, lon } } }], must_not: notItself(uri) } });
+// Jaartallen uit ABR: startDate = beginjaar van de beginperiode, endDate = eindjaar van de eindperiode; negatief = v. Chr.
+// jaar = { van, tot, modus }: 'overlapt' (de datering valt deels in het bereik) of 'binnen' (helemaal erin).
+// Brede dateringen (bijv. Prehistorie - Nieuwe Tijd, -1.000.000 tot 1945) overlappen met bijna elk bereik.
+export const JAAR_MIN = -1000000, JAAR_MAX = 2100;
+export const jaarTekst = jaar => (jaar < 0 ? `${new Intl.NumberFormat('nl-NL').format(-jaar)} v. Chr.` : `${jaar} n. Chr.`);
+export const JAARMODI = { overlapt: '(deels)', binnen: 'helemaal' };
+export const jaarBereik = ({ van = null, tot = null } = {}) => (van != null && tot != null ? `de periode ${jaarTekst(van)} – ${jaarTekst(tot)}` : van != null ? `de periode vanaf ${jaarTekst(van)}` : `de periode tot ${jaarTekst(tot)}`);
+const geldigJaar = value => value == null || (Number.isInteger(value) && value >= JAAR_MIN && value <= JAAR_MAX);
+export function jaarClause({ van = null, tot = null, modus = 'overlapt' } = {}) {
+  const start = `${fields.startDate}.getal`, eind = `${fields.endDate}.getal`;
+  const filter = modus === 'binnen'
+    ? [van != null && { range: { [start]: { gte: van } } }, tot != null && { range: { [eind]: { lte: tot } } }]
+    : [tot != null && { range: { [start]: { lte: tot } } }, van != null && { range: { [eind]: { gte: van } } }];
+  return { bool: { filter: filter.filter(Boolean) } };
+}
 // Filters zijn { facet: [waarden] }: binnen één facet OF, tussen facetten EN.
 function clauseFor(key, list) {
   if (key === 'soort') return { terms: { [SOORT_FIELD]: list } };
@@ -81,7 +97,7 @@ function filterClauses(filters, skip, binnen) {
   if (skip !== 'soort' && verbergt({ filters, binnen })) clauses.push(clauseFor('soort', STANDAARD_SOORTEN));
   return clauses;
 }
-function validate({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null }, context) {
+function validate({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null }, context) {
   if (!Object.hasOwn(searchFields, field)) throw new Error('Onbekend zoekveld.');
   if (!Object.hasOwn(sorts, sort)) throw new Error('Onbekende sortering.');
   if (!Number.isInteger(page) || page < 0 || (page + 1) * PAGE_SIZE > MAX_WINDOW) throw new Error('Verfijn je zoekvraag om meer resultaten te bekijken.');
@@ -94,8 +110,12 @@ function validate({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, s
     if (key === 'soort' && !list.every(item => Object.hasOwn(soorten, item))) throw new Error('Ongeldig filter.');
     if (list.length) clean[key] = [...new Set(list)];
   }
+  if (jaar != null && (!geldigJaar(jaar.van) || !geldigJaar(jaar.tot) || (jaar.van == null && jaar.tot == null) || !Object.hasOwn(JAARMODI, jaar.modus ?? 'overlapt'))) throw new Error('Ongeldig jaartal.');
+  if (jaar?.van != null && jaar?.tot != null && jaar.van > jaar.tot) throw new Error('Het beginjaar moet vóór het eindjaar liggen.');
   const text = query.trim() ? { query_string: { query: query.trim(), fields: queryFields(field), allow_leading_wildcard: jokers === true } } : { match_all: {} };
-  const search = binnen ? { bool: { must: [text], filter: [context.clause] } } : text;
+  // Context (binnen) en jaartal gaan in de query: ze beperken ook de facetten en de totalen.
+  const filter = [binnen && context.clause, jaar && jaarClause(jaar)].filter(Boolean);
+  const search = filter.length ? { bool: { must: [text], filter } } : text;
   return { search, filters: clean, field, page, sort, binnen };
 }
 const facetAggs = (filters, binnen) => Object.fromEntries(Object.keys(facets).map(key => [key, {
@@ -141,7 +161,8 @@ export function buildRelationQuery(parents, containers) {
     // De hits zelf zijn alleen de ouders (post_filter).
     query: { bool: { should: [parentClause, ...INSIDE_FIELDS.map(field => ({ terms: { [`${field}.keyword`]: list(containers) } }))], minimum_should_match: 1 } },
     post_filter: parentClause,
-    aggs: { inhoud: { filters: { filters: Object.fromEntries(containers.map(uri => [uri, insideClause(uri)])) }, aggs: { soort: { terms: { field: SOORT_FIELD, size: 10 } } } } }
+    // Een lege filters-aggregation weigert Elasticsearch; zonder containers (bijv. een pagina met alleen vondsten) geen telling.
+    ...(containers.length ? { aggs: { inhoud: { filters: { filters: Object.fromEntries(containers.map(uri => [uri, insideClause(uri)])) }, aggs: { soort: { terms: { field: SOORT_FIELD, size: 10 } } } } } } : {})
   };
 }
 // Inhoud per object uit het antwoord van buildRelationQuery: Map(uri → { soort: aantal }), alleen objecten met inhoud.
@@ -175,12 +196,15 @@ export function safeUrl(value) {
 // Openbaar of niet: alles behalve "openbaar" (en leeg) geldt als vertrouwelijk.
 export const vertrouwelijk = source => values(source?.[fields.conditionsOfAccess]).some(value => value !== 'openbaar');
 // Deelbare URL: ?q=…&veld=…&soort=…&periode=…&binnen=vondstlocatie:6129412&sorteer=…&pagina=…
-const params = { soort: 'soort', name: 'type', temporalCoverage: 'periode', material: 'materiaal', genre: 'stijl', category: 'waardering', addressRegion: 'provincie', addressLocality: 'plaats', conditionsOfAccess: 'toegang' };
-export function toParams({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null }) {
+const params = { soort: 'soort', name: 'type', keywords: 'groep', temporalCoverage: 'periode', material: 'materiaal', genre: 'stijl', category: 'waardering', addressRegion: 'provincie', addressLocality: 'plaats', conditionsOfAccess: 'toegang' };
+export function toParams({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null }) {
   const result = new URLSearchParams();
   if (query.trim()) result.set('q', query.trim());
   if (field !== DEFAULT_FIELD) result.set('veld', field);
   if (binnen) result.set('binnen', binnen);
+  if (jaar?.van != null) result.set('van', String(jaar.van));
+  if (jaar?.tot != null) result.set('tot', String(jaar.tot));
+  if (jaar && jaar.modus === 'binnen') result.set('jaarmodus', 'binnen');
   for (const [key, list] of Object.entries(filters)) for (const value of list) result.append(params[key], value);
   if (sort !== 'relevantie') result.set('sorteer', sort);
   if (page > 0) result.set('pagina', String(page + 1));
@@ -196,6 +220,9 @@ export function fromParams(search) {
   }
   const page = Number.parseInt(input.get('pagina') ?? '1', 10);
   const binnen = input.get('binnen');
+  const getal = name => (/^-?\d{1,7}$/.test(input.get(name) ?? '') ? Number(input.get(name)) : null);
+  const van = getal('van'), tot = getal('tot');
+  const jaarOk = (van != null || tot != null) && geldigJaar(van) && geldigJaar(tot) && (van == null || tot == null || van <= tot);
   const state = {
     query: (input.get('q') ?? '').slice(0, 500),
     field: Object.hasOwn(searchFields, input.get('veld')) ? input.get('veld') : DEFAULT_FIELD,
@@ -204,15 +231,16 @@ export function fromParams(search) {
     // Verborgen testschakelaar: ?jokers=1 staat een jokerteken aan het begin toe (bijv. *molen). Niet in de interface.
     jokers: input.get('jokers') === '1',
     binnen: binnen && BINNEN.test(binnen) ? binnen : null,
+    jaar: jaarOk ? { van, tot, modus: input.get('jaarmodus') === 'binnen' ? 'binnen' : 'overlapt' } : null,
     page: Number.isInteger(page) && page >= 1 && page * PAGE_SIZE <= MAX_WINDOW ? page - 1 : 0
   };
-  return { state, active: [...input.keys()].some(key => ['q', 'binnen', ...Object.values(params)].includes(key)) };
+  return { state, active: [...input.keys()].some(key => ['q', 'binnen', 'van', 'tot', ...Object.values(params)].includes(key)) };
 }
 // Uitleg van de zoekactie in gewone taal. binnenLabel is bijv. 'vondstlocatie “Kletterstraat” (6129412)'.
 const fieldText = { Alles: 'in alle tekstvelden', Omschrijving: 'in de omschrijving', Naam: 'in de naam of het type', Plaats: 'in de plaatsnaam', Periode: 'in de periode', Materiaal: 'in het materiaal', Nummer: 'in het nummer (CHOI of Archis)', Exact: 'exact (zonder meervoud, samenstellingen en synoniemen)' };
 const filterValue = (key, value) => `“${key === 'soort' ? soorten[value] ?? value : value}”`;
 export function describe(state = {}, binnenLabel) {
-  const { query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null } = state;
+  const { query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null } = state;
   const lines = [];
   const trimmed = query.trim();
   if (!trimmed) lines.push(binnen ? 'Toont alles (geen zoekvraag).' : 'Toont alle objecten (geen zoekvraag).');
@@ -223,6 +251,7 @@ export function describe(state = {}, binnenLabel) {
     if (words.length > 1 && !words.some(word => /^(AND|OR|NOT|&&|\|\|)$/.test(word) || /^[+-]/.test(word))) lines.push('Zonder AND/OR/NOT is het genoeg als één van de woorden voorkomt.');
   }
   if (binnen) lines.push(binnen.startsWith('rond:') ? `Alleen wat binnen ${binnenLabel ?? binnen} ligt.` : `Alleen wat ligt in ${binnenLabel ?? binnen}.`);
+  if (jaar) lines.push(`Alleen objecten waarvan de datering ${JAARMODI[jaar.modus ?? 'overlapt']} valt in ${jaarBereik(jaar)} (jaartallen uit ABR).`);
   if (verbergt({ filters, binnen })) lines.push('Vondsten en grondsporen worden niet getoond; vink ze aan bij Soort om ze mee te nemen.');
   const active = Object.entries(filters).filter(([, list]) => list.length);
   if (active.length) lines.push(`Alleen objecten met ${active.map(([key, list]) => `${facets[key].toLowerCase()} ${list.map(value => filterValue(key, value)).join(' of ')}`).join(', en ')}.`);
@@ -233,7 +262,7 @@ export function describe(state = {}, binnenLabel) {
 }
 // CSV met puntkomma (opent direct goed in Nederlandse Excel) en BOM voor UTF-8.
 export function toCsv(hits, decode = text => text) {
-  const columns = [['Soort', 'soort'], ['Nummer (CHOI)', 'identifier'], ['Archis-nummer', 'alternateName'], ['Naam of type', 'name'], ['Periode', 'temporalCoverage'], ['Materiaal', 'material'], ['Stijl en cultuur', 'genre'], ['Aantal', 'materialExtent'], ['Toestand', 'itemCondition'], ['Waardering', 'category'], ['Plaats', 'addressLocality'], ['Provincie', 'addressRegion'], ['Toegang', 'conditionsOfAccess'], ['Ligt in', 'ligtIn'], ['Onderzoeksgebied', 'isPartOf'], ['Linked Data', '@id'], ['Omschrijving', 'description']];
+  const columns = [['Soort', 'soort'], ['Nummer (CHOI)', 'identifier'], ['Archis-nummer', 'alternateName'], ['Naam of type', 'name'], ['Periode', 'temporalCoverage'], ['Beginjaar', 'startDate'], ['Eindjaar', 'endDate'], ['Materiaal', 'material'], ['Stijl en cultuur', 'genre'], ['Aantal', 'materialExtent'], ['Toestand', 'itemCondition'], ['Waardering', 'category'], ['Plaats', 'addressLocality'], ['Provincie', 'addressRegion'], ['Toegang', 'conditionsOfAccess'], ['Ligt in', 'ligtIn'], ['Onderzoeksgebied', 'isPartOf'], ['Linked Data', '@id'], ['ABR-begrip', 'sameAs'], ['Typegroep (ABR)', 'keywords'], ['Omschrijving', 'description']];
   const cell = text => {
     const value = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text; // voorkom formule-injectie in spreadsheets
     return /[";\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;

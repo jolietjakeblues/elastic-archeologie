@@ -22,12 +22,18 @@
       <div class="query-input"><label for="query">Jouw zoekvraag</label><input id="query" name="query" type="search" maxlength="500" placeholder="Bijvoorbeeld: grafheuvel of aardewerk AND Romeins" aria-describedby="syntax"></div>
       <div><label for="field">Zoek in</label><select id="field" name="field"><option>Alles</option><option>Omschrijving</option><option>Naam</option><option>Plaats</option><option>Periode</option><option>Materiaal</option><option>Nummer</option><option>Exact</option></select></div>
       <div class="actions"><button type="submit" class="primary">Zoek</button><button type="button" id="reset" title="Wis zoekvraag, filters en resultaten">Opnieuw beginnen</button></div>
+      <fieldset class="jaar-input" aria-describedby="jaar-hint"><legend>Datering <span class="optional">(optioneel, jaartallen uit ABR)</span></legend>
+        <div class="jaar-row"><label for="van">Van</label><input id="van" type="number" inputmode="numeric" min="-1000000" max="2100" step="1" placeholder="bijv. -500">
+          <label for="tot">tot</label><input id="tot" type="number" inputmode="numeric" min="-1000000" max="2100" step="1" placeholder="bijv. 500">
+          <label for="jaarmodus" class="visually-hidden">Hoe</label><select id="jaarmodus"><option value="overlapt">datering valt er (deels) in</option><option value="binnen">datering valt er helemaal in</option></select></div>
+        <p id="jaar-hint" class="hint">Negatief is vóór Christus: <strong>-500 tot 500</strong> is 500 v. Chr. tot 500 n. Chr. Brede dateringen (bijv. Prehistorie – Nieuwe Tijd) vallen bijna altijd <em>deels</em> in een periode; kies <em>helemaal</em> voor alleen nauw gedateerde objecten.</p></fieldset>
       <p id="syntax" class="hint">Combineer met AND, OR, NOT (in hoofdletters) en haakjes. Gebruik quotes voor een exacte woordcombinatie. Vondsten en grondsporen staan standaard uit; vink ze aan bij <strong>Soort</strong>. <button type="button" id="help-open" class="link-button">Zoekhulp en meer voorbeelden</button></p>
       <p id="query-tip" class="tip" hidden></p>
       <div class="examples"><span>Probeer:</span>
         <button type="button" data-example="grafheuvel">grafheuvel</button>
         <button type="button" data-example="" data-soort="archeologischterrein">Alle archeologische terreinen</button>
         <button type="button" data-example="aardewerk" data-soort="vondsten" data-periode="Romeinse Tijd">Romeins aardewerk (vondsten)</button>
+        <button type="button" data-example="" data-soort="vondsten" data-groep="metaal" data-van="-800" data-tot="-12" data-jaarmodus="binnen">Metalen vondsten uit de IJzertijd (jaartallen)</button>
         <button type="button" data-example="" data-binnen="vondstlocatie:6129412">Alles in vondstlocatie Kletterstraat (Lochem)</button>
         <button type="button" data-example="" data-binnen="archeologischterrein:6049046">Complexen in terrein Domplein (Utrecht)</button>
         <button type="button" data-example="" data-binnen="rond:archeologischonderzoeksgebied:2041587:1000">Binnen 1 km van een onderzoeksgebied</button>
@@ -102,7 +108,8 @@
     <ul>
       <li><strong>Nummer</strong> is de CHOI, het getal aan het eind van de URI. Archis-nummers (waarnemings-, vondstmeldings-, vondst-, complex- en monumentnummer) staan apart en zijn te vinden via <strong>Zoek in: Nummer</strong>.</li>
       <li><strong>Toegang</strong>: objecten die niet openbaar zijn krijgen een label. Dit is een testopzet.</li>
-      <li>Een periode staat als tekst in de data (bijv. "Romeinse Tijd - Nieuwe Tijd Laat"), zonder jaartallen.</li>
+      <li><strong>Datering:</strong> de periode komt uit ABR, met jaartallen (bijv. Romeinse Tijd = 12 v. Chr. – 449 n. Chr.). Filter op jaartal met <strong>Van</strong> en <strong>tot</strong>, of sorteer op <strong>Periode (oud → jong)</strong>.</li>
+      <li><strong>ABR-hiërarchie:</strong> de facet <strong>Typegroep</strong> bevat de bovenliggende ABR-begrippen van het type (bijv. "aardewerk:onbepaald"), en <strong>Materiaal</strong> ook de groepen (bijv. ijzer → metaal → anorganisch). Kies "metaal" en je vindt ijzer, brons, koper enz. Elk type heeft een link naar het ABR-begrip.</li>
       <li>Operatoren in hoofdletters; zonder operator betekent een spatie OR. Hoofdletters en accenten maken niet uit.</li>
     </ul>
   </dialog>

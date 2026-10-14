@@ -53,7 +53,11 @@ Templates worden alleen bij het aanmaken gelezen; een wijziging betekent de serv
 - **Rijksmonument** (waarin een terrein ligt): staat in `erfgoed-sdo`. Nummer en naam komen met een tweede request uit de service `Erfgoed-sdo-nl3`; de link opent het monument in de [erfgoeddemo](https://erfgoed-sdo-elastic-demo.jolietjakeblues64.workers.dev/).
 - **Bevat** bij een onderzoeksgebied, vondstlocatie of terrein: hoeveel objecten erin liggen, per soort, met **Toon wat erin ligt** (`binnen=vondstlocatie:6129412`). Bij een onderzoeksgebied zijn dat alle niveaus: vondstlocaties, en via `isPartOf` ook de vondsten, grondsporen en complexen daarin. Dat is één extra request voor de hele pagina: een `filters`-aggregation met per object dezelfde clause als **Toon wat erin ligt**, zodat een object één keer telt.
 - **In de buurt** (`binnen=rond:archeologischonderzoeksgebied:2041587:1000`): `geo_distance` vanaf het (zwaarte)punt, voor objecten met een geometrie.
-- Facetten: soort, naam of type, periode, materiaal, stijl en cultuur, waardering, provincie, plaats, toegang. Sorteren op relevantie (naam telt 3×), naam, plaats, periode, soort of nummer.
+- **Datering met jaartallen uit ABR** (`?van=-500&tot=500`, eventueel `&jaarmodus=binnen`). Beginjaar (`startDate`) en eindjaar (`endDate`) staan als getal in de index (`.getal`, uit de index template). Standaard telt een object mee als de datering er **(deels)** in valt (`startDate ≤ tot` en `endDate ≥ van`); met *helemaal* moet de hele datering erbinnen vallen. Brede dateringen (bijv. Prehistorie – Nieuwe Tijd, −1.000.000 tot 1945) vallen bijna altijd deels in een periode. Het filter staat in de query (net als *binnen*), dus facetten en totalen tellen mee.
+- **Chronologisch sorteren**: *Periode (oud → jong)* sorteert op `startDate.getal`, dan `endDate.getal`.
+- **ABR-hiërarchie als facet**: *Typegroep (ABR) of kenmerk* (`keywords`: de bovenliggende ABR-begrippen van het type; bij vondstlocaties en onderzoeksgebieden ook verwerving en AMK-indicatie) en *Materiaal (met groepen)* (bijv. ijzer → metaal → anorganisch). Filteren op "metaal" vindt ijzer, brons, koper enz.
+- **ABR-begrip**: bij vondsten, grondsporen en complexen een link naar het ABR-concept van het type (`sameAs`).
+- Facetten: soort, naam of type, typegroep, periode, materiaal, stijl en cultuur, waardering, provincie, plaats, toegang. Sorteren op relevantie (naam telt 3×), naam, plaats, periode (chronologisch), soort of nummer.
 
 ## Lokaal starten
 
@@ -73,7 +77,7 @@ npm test
 npm run test:live
 ```
 
-`npm test` test queryopbouw, standaardfilter, relaties, URL, uitleg en CSV zonder netwerk. `npm run test:live` test tegen de service: CORS, soortfacet = totaal, geen `#…`-documenten, de standaard zonder vondsten en grondsporen, binnen vondstlocatie 6129412, de inhoudtelling, in de buurt en sorteren op nummer. Andere service: `node tests/live.mjs <naam>`.
+`npm test` test queryopbouw, standaardfilter, datering, relaties, URL, uitleg en CSV zonder netwerk. `npm run test:live` test tegen de service: CORS, soortfacet = totaal, geen `#…`-documenten, de standaard zonder vondsten en grondsporen, binnen vondstlocatie 6129412, de inhoudtelling, in de buurt en sorteren op nummer. Andere service: `node tests/live.mjs <naam>`.
 
 ## Deployment
 
@@ -99,4 +103,5 @@ npx wrangler deploy
 
 - Complexen, grondsporen en vondsten hebben geen locatie; vondstlocaties en terreinen alleen een geleend vlak. Dat vlak is het hele onderzoeksgebied of rijksmonument, niet de vindplek.
 - Facetten tonen de 100 meest voorkomende waarden.
+- In de brondata staan soms omgekeerde dateringen (beginperiode later dan eindperiode, bijv. "Midden Romeinse Tijd A - Laat Neolithicum") en een aantal van 9999 als onbekend. Die komen ongewijzigd in de demo.
 - De kaart toont alleen de resultaten van de huidige pagina (25).
