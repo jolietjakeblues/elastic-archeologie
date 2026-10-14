@@ -1,4 +1,4 @@
-import { buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, lookupQuery, insideClause, nearClause, AFSTANDEN, MET_INHOUD, MET_LOCATIE, PARENT_FIELDS, VERBORGEN, verbergt, vertrouwelijk, bucketsOf, search, setService, DEFAULT_SERVICE, facets, fields, sorts, soorten, extern, soortVan, values, textValue, safeUrl, toParams, fromParams, describe, toCsv, DEFAULT_FIELD, PAGE_SIZE, MAX_WINDOW, EXPORT_MAX } from './search.js';
+import { buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, erfgoedQuery, erfgoedDemoUrl, ERFGOED_ENDPOINT, lookupQuery, insideClause, nearClause, AFSTANDEN, MET_INHOUD, MET_LOCATIE, PARENT_FIELDS, VERBORGEN, verbergt, vertrouwelijk, bucketsOf, search, setService, DEFAULT_SERVICE, facets, fields, sorts, soorten, extern, soortVan, values, textValue, safeUrl, toParams, fromParams, describe, toCsv, DEFAULT_FIELD, PAGE_SIZE, MAX_WINDOW, EXPORT_MAX } from './search.js';
 import { geometryFor } from './geo.js';
 const $ = id => document.getElementById(id);
 // Testschakelaar: ?service=<naam> zoekt in een andere service van rce/archeologie-sdo.
@@ -43,7 +43,8 @@ async function resolveContext(binnen) {
     const meters = Number(bits[3]);
     context = { soort, nummer, uri, meters, clause: nearClause(geometry.point, meters, uri), label: `${format(meters)} m rond ${soortLabel(soort).toLowerCase()} ${nummer}${naam ? ` “${naam}”` : ''}`, summary: 'alles met een locatie dat (deels) binnen deze afstand van het punt van het object ligt (geo_distance)', geometry, circle: { point: geometry.point, meters } };
   } else {
-    context = { soort, nummer, uri, clause: insideClause(uri), label: `${soortLabel(soort).toLowerCase()} “${naam || 'zonder naam'}” (${nummer})`, summary: 'de objecten die hier direct in liggen (containedInPlace, locationCreated of spatialCoverage)', geometry };
+    const summary = soort === 'archeologischonderzoeksgebied' ? 'alles wat hierin ligt, ook de vondsten, grondsporen en complexen in de vondstlocaties van dit gebied (containedInPlace of isPartOf)' : 'de objecten die hier direct in liggen (containedInPlace, locationCreated of spatialCoverage)';
+    context = { soort, nummer, uri, clause: insideClause(uri), label: `${soortLabel(soort).toLowerCase()} “${naam || 'zonder naam'}” (${nummer})`, summary, geometry };
   }
   contexts.set(binnen, context);
   return context;
@@ -110,31 +111,48 @@ function renderResults(hits) {
   }
 }
 // Eén extra request voor de hele pagina: de objecten waarin de resultaten liggen (naam en nummer), en per
-// onderzoeksgebied, vondstlocatie of terrein hoeveel er in ligt, per soort.
+// onderzoeksgebied, vondstlocatie of terrein hoeveel er in ligt, per soort. Rijksmonumenten (waarin een terrein
+// ligt) staan in erfgoed-sdo; die komen tegelijk uit een tweede request naar die service.
 async function loadRelations(hits, signal) {
   const parents = new Set(), containers = [];
   for (const { _source: source = {} } of hits) {
-    for (const field of PARENT_FIELDS) values(source[field]).forEach(uri => parents.add(uri));
+    for (const field of [...PARENT_FIELDS, fields.isPartOf]) values(source[field]).forEach(uri => parents.add(uri));
     if (MET_INHOUD.includes(soortVan(source['@id']))) containers.push(source['@id']);
   }
   if (!parents.size && !containers.length) return;
-  let data;
-  try { data = await search(buildRelationQuery([...parents], containers), signal); } catch (error) { if (error.name !== 'AbortError') console.error('Relaties', error); return; }
+  const monumenten = [...parents].filter(uri => soortVan(uri) === 'rijksmonument');
+  const eigen = [...parents].filter(uri => soortVan(uri) !== 'rijksmonument');
+  let data, erfgoed;
+  try {
+    [data, erfgoed] = await Promise.all([
+      search(buildRelationQuery(eigen, containers), signal),
+      monumenten.length ? search(erfgoedQuery(monumenten), signal, ERFGOED_ENDPOINT).catch(error => { console.error('Erfgoed-sdo', error); return null; }) : null
+    ]);
+  } catch (error) { if (error.name !== 'AbortError') console.error('Relaties', error); return; }
   const byUri = new Map(data.hits.hits.map(({ _source: source }) => [source['@id'], source]));
+  const monumentByUri = new Map((erfgoed?.hits.hits ?? []).map(({ _source: source }) => [source['@id'], source]));
   const inhoud = inhoudVan(data.aggregations);
   const objectButton = uri => {
-    const source = byUri.get(uri), soort = soortVan(uri), nummer = source && values(source[fields.identifier])[0];
-    if (!source) {
-      // Buiten deze index (bijv. een rijksmonument in erfgoed-sdo): alleen een link naar de Linked Data.
+    const soort = soortVan(uri);
+    if (soort === 'rijksmonument') {
+      // In de erfgoeddemo openen; zonder nummer (niet gevonden) alleen de Linked Data.
+      const monument = monumentByUri.get(uri), nummer = monument && values(monument[fields.identifier])[0];
+      const naam = monument && show(monument[fields.name]);
+      if (nummer) { const node = link(`Rijksmonument ${nummer}${naam && naam !== '-' ? ` ${naam}` : ''}`, erfgoedDemoUrl(nummer)); node.className = 'relation-button'; node.title = 'Openen in de Erfgoed SDO/Elastic demo'; return node; }
       const url = safeUrl(uri);
-      return url ? link(`${soortLabel(soort)} (Linked Data)`, url) : el('span', uri);
+      return url ? link('Rijksmonument (Linked Data)', url) : el('span', uri);
     }
+    const source = byUri.get(uri), nummer = source && values(source[fields.identifier])[0];
+    if (!source) { const url = safeUrl(uri); return url ? link(`${soortLabel(soort)} (Linked Data)`, url) : el('span', uri); }
     const text = `${soortLabel(soort)} ${nummer ?? ''}${show(source[fields.name]) ? ` ${show(source[fields.name])}` : ''}`.trim();
     return nummer ? button(text, () => showObject(soort, nummer), 'relation-button') : el('span', text);
   };
+  const rij = (label, uris) => relationRow(label, uris.slice(0, 5).map(objectButton).concat(uris.length > 5 ? [el('span', `en ${uris.length - 5} meer`)] : []));
   for (const { slot, source, soort, nummer } of relationSlots.values()) {
     const ouders = PARENT_FIELDS.flatMap(field => values(source[field]));
-    if (ouders.length) slot.append(relationRow('Ligt in:', ouders.slice(0, 5).map(objectButton).concat(ouders.length > 5 ? [el('span', `en ${ouders.length - 5} meer`)] : [])));
+    if (ouders.length) slot.append(rij('Ligt in:', ouders));
+    const gebieden = values(source[fields.isPartOf]).filter(uri => !ouders.includes(uri));
+    if (gebieden.length) slot.append(rij('Onderzoeksgebied:', gebieden));
     if (MET_INHOUD.includes(soort) && nummer) {
       const counts = inhoud.get(source['@id']);
       const parts = counts ? Object.entries(counts).sort((a, b) => b[1] - a[1]).map(([key, count]) => aantalSoort(key, count)) : [];

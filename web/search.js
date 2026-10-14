@@ -1,7 +1,7 @@
 import { WKT_FIELD } from './geo.js';
 // De service kan voor een test worden overschreven met ?service=<naam> (alleen services van rce/archeologie-sdo).
 export const DATASET = 'https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/archeologie-sdo/services/';
-export const DEFAULT_SERVICE = 'Archeologie-sdo-nl';
+export const DEFAULT_SERVICE = 'Archeologie-sdo-abr';
 export const SERVICE = /^[\w-]{1,64}$/;
 let service = DEFAULT_SERVICE;
 export const setService = name => { service = SERVICE.test(name ?? '') ? name : DEFAULT_SERVICE; return service; };
@@ -11,7 +11,7 @@ export const MAX_WINDOW = 10000;
 export const EXPORT_MAX = 1000;
 const MAX_VALUES = 20;
 export const BASE = 'https://linkeddata.cultureelerfgoed.nl/cho-kennis/id/';
-export const fields = Object.fromEntries(['description', 'name', 'alternateName', 'addressLocality', 'addressRegion', 'category', 'additionalType', 'identifier', 'temporalCoverage', 'material', 'genre', 'materialExtent', 'itemCondition', 'conditionsOfAccess', 'keywords', 'containedInPlace', 'locationCreated', 'spatialCoverage'].map(key => [key, `https://schema org/${key}`]));
+export const fields = Object.fromEntries(['description', 'name', 'alternateName', 'addressLocality', 'addressRegion', 'category', 'additionalType', 'identifier', 'temporalCoverage', 'material', 'genre', 'materialExtent', 'itemCondition', 'conditionsOfAccess', 'keywords', 'containedInPlace', 'locationCreated', 'spatialCoverage', 'isPartOf'].map(key => [key, `https://schema org/${key}`]));
 // De soort staat alleen in de URI: …/id/vondstlocatie/…, …/id/vondsten/… enzovoort.
 export const soorten = { archeologischonderzoeksgebied: 'Onderzoeksgebied', vondstlocatie: 'Vondstlocatie', archeologischterrein: 'Archeologisch terrein', archeologischcomplex: 'Archeologisch complex', grondsporen: 'Grondspoor', vondsten: 'Vondst' };
 // Objecten buiten deze index waarnaar verwezen kan worden (een terrein ligt in een rijksmonument uit erfgoed-sdo).
@@ -25,6 +25,13 @@ export const STANDAARD_SOORTEN = Object.keys(soorten).filter(soort => !VERBORGEN
 const SOORT_FIELD = '@id.soort';
 // Waar een object in ligt: een vondstlocatie of complex (containedInPlace), een grondspoor (locationCreated) of een vondst (spatialCoverage).
 export const PARENT_FIELDS = [fields.containedInPlace, fields.locationCreated, fields.spatialCoverage];
+// Indirect: vondsten, grondsporen en complexen in een vondstlocatie hebben ook het onderzoeksgebied van die
+// vondstlocatie (isPartOf). "Binnen een onderzoeksgebied" vindt daardoor alle niveaus.
+export const INSIDE_FIELDS = [...PARENT_FIELDS, fields.isPartOf];
+// Rijksmonumenten (waarin een terrein ligt) staan in erfgoed-sdo; nummer en naam komen uit die service, de link
+// gaat naar de erfgoeddemo.
+export const ERFGOED_ENDPOINT = 'https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/erfgoed-sdo/services/Erfgoed-sdo-nl3/_search';
+export const ERFGOED_DEMO = 'https://erfgoed-sdo-elastic-demo.jolietjakeblues64.workers.dev/';
 export const searchFields = {
   Alles: ['name', 'alternateName', 'description', 'addressLocality', 'addressRegion', 'category', 'temporalCoverage', 'material', 'genre', 'keywords', 'identifier'].map(key => fields[key]),
   Omschrijving: [fields.description], Naam: [fields.name], Plaats: [fields.addressLocality],
@@ -52,14 +59,15 @@ export const sorts = {
 };
 // "Binnen": een context voor de zoekactie.
 //   archeologischonderzoeksgebied:2041587, vondstlocatie:6129412, archeologischterrein:6046656
-//                                       wat erin ligt volgens de relaties (containedInPlace, locationCreated, spatialCoverage)
+//                                       wat erin ligt volgens de relaties (containedInPlace, locationCreated, spatialCoverage,
+//                                       en isPartOf voor alles in een onderzoeksgebied via een vondstlocatie)
 //   rond:vondstlocatie:6129412:500      alles met een geometrie binnen 500 m van een object (geo_distance)
 export const AFSTANDEN = [100, 250, 500, 1000, 2000];
 export const MET_INHOUD = ['archeologischonderzoeksgebied', 'vondstlocatie', 'archeologischterrein'];
 export const MET_LOCATIE = ['archeologischonderzoeksgebied', 'vondstlocatie', 'archeologischterrein'];
 export const BINNEN = new RegExp(`^((${MET_INHOUD.join('|')}):\\d{1,10}|rond:(${MET_LOCATIE.join('|')}):\\d{1,10}:(${AFSTANDEN.join('|')}))$`);
 const notItself = uri => [{ term: { '@id.keyword': uri } }];
-export const insideClause = uri => ({ bool: { should: PARENT_FIELDS.map(field => ({ term: { [`${field}.keyword`]: uri } })), minimum_should_match: 1 } });
+export const insideClause = uri => ({ bool: { should: INSIDE_FIELDS.map(field => ({ term: { [`${field}.keyword`]: uri } })), minimum_should_match: 1 } });
 export const nearClause = ({ lat, lon }, meters, uri) => ({ bool: { filter: [{ geo_distance: { distance: `${meters}m`, [WKT_FIELD]: { lat, lon } } }], must_not: notItself(uri) } });
 // Filters zijn { facet: [waarden] }: binnen één facet OF, tussen facetten EN.
 function clauseFor(key, list) {
@@ -121,7 +129,8 @@ export function bucketsOf(aggregation) {
 }
 // Relaties van de resultaten op deze pagina in één request:
 // - de objecten waarin ze liggen (namen en nummers), via hun URI;
-// - per object hoeveel er in ligt, per soort (aggregation op de drie relatievelden, alleen voor deze URI's).
+// - per onderzoeksgebied, vondstlocatie of terrein hoeveel er in ligt, per soort (een filters-aggregation met per
+//   object dezelfde clause als "Toon wat erin ligt", zodat een object dat via twee velden matcht één keer telt).
 export function buildRelationQuery(parents, containers) {
   const list = items => (items.length ? items : ['-']);
   const parentClause = { terms: { '@id.keyword': list(parents) } };
@@ -130,24 +139,23 @@ export function buildRelationQuery(parents, containers) {
     _source: ['@id', fields.identifier, fields.name],
     // Aggregations tellen binnen de query: die moet dus ook alles vinden wat in de containers ligt.
     // De hits zelf zijn alleen de ouders (post_filter).
-    query: { bool: { should: [parentClause, ...PARENT_FIELDS.map(field => ({ terms: { [`${field}.keyword`]: list(containers) } }))], minimum_should_match: 1 } },
+    query: { bool: { should: [parentClause, ...INSIDE_FIELDS.map(field => ({ terms: { [`${field}.keyword`]: list(containers) } }))], minimum_should_match: 1 } },
     post_filter: parentClause,
-    aggs: Object.fromEntries(PARENT_FIELDS.map((field, index) => [`in${index}`, {
-      filter: { terms: { [`${field}.keyword`]: list(containers) } },
-      aggs: { ouders: { terms: { field: `${field}.keyword`, include: list(containers), size: containers.length || 1 }, aggs: { soort: { terms: { field: SOORT_FIELD, size: 10 } } } } }
-    }]))
+    aggs: { inhoud: { filters: { filters: Object.fromEntries(containers.map(uri => [uri, insideClause(uri)])) }, aggs: { soort: { terms: { field: SOORT_FIELD, size: 10 } } } } }
   };
 }
-// Inhoud per object uit het antwoord van buildRelationQuery: Map(uri → { soort: aantal }).
+// Inhoud per object uit het antwoord van buildRelationQuery: Map(uri → { soort: aantal }), alleen objecten met inhoud.
 export function inhoudVan(aggregations = {}) {
   const result = new Map();
-  for (const aggregation of Object.values(aggregations)) for (const bucket of aggregation?.ouders?.buckets ?? []) {
-    const counts = result.get(bucket.key) ?? {};
-    for (const { key, doc_count } of bucket.soort?.buckets ?? []) counts[key] = (counts[key] ?? 0) + doc_count;
-    result.set(bucket.key, counts);
+  for (const [uri, bucket] of Object.entries(aggregations.inhoud?.buckets ?? {})) {
+    if (!bucket.doc_count) continue;
+    result.set(uri, Object.fromEntries((bucket.soort?.buckets ?? []).map(({ key, doc_count }) => [key, doc_count])));
   }
   return result;
 }
+// Rijksmonumenten uit erfgoed-sdo opzoeken op URI: nummer en naam.
+export const erfgoedQuery = uris => ({ size: Math.min(uris.length, 100), timeout: '15s', _source: ['@id', fields.identifier, fields.name], query: { terms: { '@id.keyword': uris.length ? uris : ['-'] } } });
+export const erfgoedDemoUrl = nummer => `${ERFGOED_DEMO}?${new URLSearchParams({ q: `"${nummer}"`, veld: 'Nummer', soort: 'rijksmonument' })}`;
 export const lookupQuery = (soort, nummer) => ({ size: 1, query: { bool: { filter: [{ term: { [SOORT_FIELD]: soort } }, { term: { [`${fields.identifier}.keyword`]: nummer } }] } }, _source: ['@id', fields.identifier, fields.name, WKT_FIELD] });
 // Export: dezelfde zoekvraag, filters en sortering, maximaal EXPORT_MAX resultaten, zonder geometrie, facets en highlights.
 export function buildExportQuery(state = {}, context) {
@@ -225,7 +233,7 @@ export function describe(state = {}, binnenLabel) {
 }
 // CSV met puntkomma (opent direct goed in Nederlandse Excel) en BOM voor UTF-8.
 export function toCsv(hits, decode = text => text) {
-  const columns = [['Soort', 'soort'], ['Nummer (CHOI)', 'identifier'], ['Archis-nummer', 'alternateName'], ['Naam of type', 'name'], ['Periode', 'temporalCoverage'], ['Materiaal', 'material'], ['Stijl en cultuur', 'genre'], ['Aantal', 'materialExtent'], ['Toestand', 'itemCondition'], ['Waardering', 'category'], ['Plaats', 'addressLocality'], ['Provincie', 'addressRegion'], ['Toegang', 'conditionsOfAccess'], ['Ligt in', 'ligtIn'], ['Linked Data', '@id'], ['Omschrijving', 'description']];
+  const columns = [['Soort', 'soort'], ['Nummer (CHOI)', 'identifier'], ['Archis-nummer', 'alternateName'], ['Naam of type', 'name'], ['Periode', 'temporalCoverage'], ['Materiaal', 'material'], ['Stijl en cultuur', 'genre'], ['Aantal', 'materialExtent'], ['Toestand', 'itemCondition'], ['Waardering', 'category'], ['Plaats', 'addressLocality'], ['Provincie', 'addressRegion'], ['Toegang', 'conditionsOfAccess'], ['Ligt in', 'ligtIn'], ['Onderzoeksgebied', 'isPartOf'], ['Linked Data', '@id'], ['Omschrijving', 'description']];
   const cell = text => {
     const value = /^[=+\-@\t\r]/.test(text) ? `'${text}` : text; // voorkom formule-injectie in spreadsheets
     return /[";\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
@@ -238,8 +246,8 @@ export function toCsv(hits, decode = text => text) {
   const rows = hits.map(hit => columns.map(([, key]) => cell(decode(get(hit._source ?? {}, key).join(' | ')))).join(';'));
   return `﻿${columns.map(([label]) => label).join(';')}\r\n${rows.join('\r\n')}\r\n`;
 }
-export async function search(body, signal) {
-  const response = await fetch(endpoint(), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal, credentials: 'omit' });
+export async function search(body, signal, url = endpoint()) {
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal, credentials: 'omit' });
   if (!response.ok) {
     const detail = await response.text();
     console.error('Elasticsearch', response.status, detail);
