@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { queryFields, WEIGHT, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, bucketsOf, insideClause, nearClause, BINNEN, PARENT_FIELDS, INSIDE_FIELDS, STANDAARD_SOORTEN, erfgoedQuery, erfgoedDemoUrl, fields, safeUrl, soortVan, vertrouwelijk, toParams, fromParams, describe, toCsv, BASE, EXPORT_MAX, setService, endpoint, DEFAULT_SERVICE } from '../web/search.js';
+import { jaarClause, jaarTekst, queryFields, WEIGHT, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, bucketsOf, insideClause, nearClause, BINNEN, PARENT_FIELDS, INSIDE_FIELDS, STANDAARD_SOORTEN, erfgoedQuery, erfgoedDemoUrl, fields, safeUrl, soortVan, vertrouwelijk, toParams, fromParams, describe, toCsv, BASE, EXPORT_MAX, setService, endpoint, DEFAULT_SERVICE } from '../web/search.js';
 const periode = `${fields.temporalCoverage}.keyword`, materiaal = `${fields.material}.keyword`;
 const standaard = { terms: { '@id.soort': STANDAARD_SOORTEN } };
 test('Zoeken (query) en filteren (post_filter) blijven gescheiden; facets tellen zonder hun eigen filter', () => {
@@ -9,7 +9,7 @@ test('Zoeken (query) en filteren (post_filter) blijven gescheiden; facets tellen
   assert.deepEqual(body.post_filter.bool.filter, [{ terms: { '@id.soort': ['vondsten'] } }, { terms: { [periode]: ['Romeinse Tijd'] } }, { terms: { [materiaal]: ['keramiek'] } }]);
   assert.deepEqual(body.aggs.temporalCoverage.filter.bool.filter, [{ terms: { '@id.soort': ['vondsten'] } }, { terms: { [materiaal]: ['keramiek'] } }]);
   assert.equal(body.from, 25); assert.equal(body.size, 25); assert.equal(body.track_total_hits, true);
-  assert.ok(buildQuery({ sort: 'periode' }).sort[0][periode]);
+  assert.ok(buildQuery({ sort: 'naam' }).sort[0][`${fields.name}.keyword`]);
 });
 test('Standaard zonder vondsten en grondsporen, behalve met soortfilter of binnen een object', () => {
   const body = buildQuery({});
@@ -55,6 +55,7 @@ test('Relaties: ouders op URI, inhoud per object en soort in één request; rijk
   assert.deepEqual(body.query.bool.should.slice(1), INSIDE_FIELDS.map(field => ({ terms: { [`${field}.keyword`]: [vl, og] } })), 'de aggregation moet ook de inhoud zien');
   assert.deepEqual(body.aggs.inhoud.filters.filters[og], insideClause(og), 'zelfde clause als Toon wat erin ligt: een object telt één keer');
   assert.deepEqual(buildRelationQuery([], []).post_filter.terms['@id.keyword'], ['-']);
+  assert.equal(buildRelationQuery([og], []).aggs, undefined, 'geen lege filters-aggregation (Elasticsearch weigert die)');
   const inhoud = inhoudVan({ inhoud: { buckets: {
     [vl]: { doc_count: 8, soort: { buckets: [{ key: 'archeologischcomplex', doc_count: 2 }, { key: 'grondsporen', doc_count: 1 }, { key: 'vondsten', doc_count: 5 }] } },
     [og]: { doc_count: 0, soort: { buckets: [] } }
@@ -88,12 +89,12 @@ test('Weging: alleen de naam telt zwaarder, alleen in Alles en Exact', () => {
   assert.deepEqual(queryFields('Nummer'), [fields.identifier, fields.alternateName]);
 });
 test('Deelbare URL: heen en terug, onbekende waarden worden genegeerd', () => {
-  const state = { query: 'aardewerk', field: 'Naam', filters: { soort: ['vondsten'], temporalCoverage: ['Romeinse Tijd'] }, page: 2, sort: 'naam', jokers: false, binnen: 'vondstlocatie:6129412' };
+  const state = { query: 'aardewerk', field: 'Naam', filters: { soort: ['vondsten'], temporalCoverage: ['Romeinse Tijd'] }, page: 2, sort: 'naam', jokers: false, binnen: 'vondstlocatie:6129412', jaar: null };
   const search = toParams(state).toString();
   assert.equal(search, 'q=aardewerk&veld=Naam&binnen=vondstlocatie%3A6129412&soort=vondsten&periode=Romeinse+Tijd&sorteer=naam&pagina=3');
   assert.deepEqual(fromParams(`?${search}`), { state, active: true });
   const bad = fromParams('?veld=__proto__&sorteer=x&pagina=-4&onbekend=1&binnen=gezicht:1&soort=rijksmonument');
-  assert.deepEqual(bad.state, { query: '', field: 'Alles', filters: {}, sort: 'relevantie', page: 0, jokers: false, binnen: null });
+  assert.deepEqual(bad.state, { query: '', field: 'Alles', filters: {}, sort: 'relevantie', page: 0, jokers: false, binnen: null, jaar: null });
   assert.equal(toParams({}).toString(), '');
 });
 test('Service: standaard of een veilige naam via ?service=', () => {
@@ -106,7 +107,8 @@ test('CSV en toegang', () => {
   const source = { '@id': `${BASE}vondsten/1`, [fields.identifier]: ['1'], [fields.alternateName]: ['vondstnummer 9'], [fields.name]: ['=SOM(A1)'], [fields.spatialCoverage]: [`${BASE}vondstlocatie/2`], [fields.description]: ['regel 1\nmet "quote"; en meer'] };
   const csv = toCsv([{ _source: source }]);
   const [header, row] = csv.slice(1).split('\r\n');
-  assert.equal(header.split(';').length, 17);
+  assert.equal(header.split(';').length, 21);
+  assert.ok(header.includes('Beginjaar;Eindjaar') && header.includes('ABR-begrip'));
   assert.match(row, /^Vondst;1;vondstnummer 9;'=SOM\(A1\);/);
   assert.ok(row.includes(`${BASE}vondstlocatie/2`));
   assert.match(csv, /"regel 1\nmet ""quote""; en meer"/);
@@ -114,4 +116,24 @@ test('CSV en toegang', () => {
   assert.equal(vertrouwelijk({ [fields.conditionsOfAccess]: ['vertrouwelijk'] }), true);
   assert.equal(vertrouwelijk({}), false);
   assert.equal(safeUrl('javascript:alert(1)'), null);
+});
+test('Datering: jaartallen uit ABR, (deels) of helemaal in een periode; in de query, dus ook voor facetten', () => {
+  const start = `${fields.startDate}.getal`, eind = `${fields.endDate}.getal`;
+  assert.deepEqual(jaarClause({ van: -500, tot: 500 }).bool.filter, [{ range: { [start]: { lte: 500 } } }, { range: { [eind]: { gte: -500 } } }], 'overlapt: begint vóór het eind en eindigt na het begin');
+  assert.deepEqual(jaarClause({ van: -500, tot: 500, modus: 'binnen' }).bool.filter, [{ range: { [start]: { gte: -500 } } }, { range: { [eind]: { lte: 500 } } }]);
+  assert.deepEqual(jaarClause({ van: 1500 }).bool.filter, [{ range: { [eind]: { gte: 1500 } } }]);
+  const body = buildQuery({ query: 'pot', jaar: { van: -12, tot: 449, modus: 'overlapt' } });
+  assert.deepEqual(body.query.bool.filter, [jaarClause({ van: -12, tot: 449 })]);
+  assert.equal(body.query.bool.must[0].query_string.query, 'pot');
+  assert.throws(() => buildQuery({ jaar: { van: 500, tot: -500 } }), /vóór het eindjaar/);
+  assert.throws(() => buildQuery({ jaar: { van: 1.5 } }), /Ongeldig jaartal/);
+  assert.throws(() => buildQuery({ jaar: {} }), /Ongeldig jaartal/);
+  assert.deepEqual(buildQuery({ sort: 'periode' }).sort, [{ [start]: { order: 'asc', missing: '_last' } }, { [eind]: { order: 'asc', missing: '_last' } }]);
+  const state = { query: '', field: 'Alles', filters: { material: ['metaal'] }, page: 0, sort: 'relevantie', jokers: false, binnen: null, jaar: { van: -800, tot: -12, modus: 'binnen' } };
+  assert.equal(toParams(state).toString(), 'van=-800&tot=-12&jaarmodus=binnen&materiaal=metaal');
+  assert.deepEqual(fromParams(`?${toParams(state)}`), { state, active: true });
+  assert.equal(fromParams('?van=600&tot=5').state.jaar, null, 'van na tot wordt genegeerd');
+  assert.equal(fromParams('?van=abc').state.jaar, null);
+  assert.equal(jaarTekst(-12), '12 v. Chr.'); assert.equal(jaarTekst(449), '449 n. Chr.'); assert.equal(jaarTekst(-1000000), '1.000.000 v. Chr.');
+  assert.match(describe({ jaar: { van: -500, tot: 500, modus: 'binnen' } }).join(' '), /helemaal valt in de periode 500 v\. Chr\. – 500 n\. Chr\./);
 });

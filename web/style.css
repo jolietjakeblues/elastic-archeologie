@@ -182,3 +182,11 @@ article.selected { box-shadow: inset 4px 0 0 var(--geel); }
 
 /* Niet-openbare objecten (testopzet) */
 .badge.vertrouwelijk { background: #d52b1e; color: #fff; margin-left: 6px; }
+/* Datering (jaartallen uit ABR) */
+.jaar-input { grid-column: 1/-1; border: 0; margin: 0; padding: 0; min-width: 0; }
+.jaar-input legend { font-weight: 700; padding: 0; margin-bottom: 4px; }
+.jaar-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.jaar-row label { margin: 0; font-weight: 400; }
+.jaar-row input { width: 9rem; } .jaar-row select { width: auto; flex: 1 1 16rem; }
+.jaar-input .hint { margin: 4px 0 0; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
