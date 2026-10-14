@@ -1,10 +1,10 @@
 {
   "type": "elasticSearch",
-  "name": "Archeologie-sdo-nl",
+  "name": "Archeologie-sdo-abr",
   "config": {
     "indexTemplates": [
       {
-        "name": "archeologie-nl",
+        "name": "archeologie-abr",
         "index_patterns": "index",
         "composed_of": [
           "nl-analyse",
@@ -241,6 +241,32 @@
                 }
               },
               "https://schema org/materialExtent": {
+                "type": "text",
+                "fields": {
+                  "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                  },
+                  "getal": {
+                    "type": "long",
+                    "ignore_malformed": true
+                  }
+                }
+              },
+              "https://schema org/startDate": {
+                "type": "text",
+                "fields": {
+                  "keyword": {
+                    "type": "keyword",
+                    "ignore_above": 256
+                  },
+                  "getal": {
+                    "type": "long",
+                    "ignore_malformed": true
+                  }
+                }
+              },
+              "https://schema org/endDate": {
                 "type": "text",
                 "fields": {
                   "keyword": {
