@@ -6,6 +6,7 @@ PREFIX graph: <https://linkeddata.cultureelerfgoed.nl/graph/>
 
 # ceo:ArcheologischComplex -> schema:Place (360.375 objecten)
 # Ligt in een vondstlocatie, archeologisch terrein of onderzoeksgebied.
+# Ligt het in een vondstlocatie, dan is schema:isPartOf het onderzoeksgebied daarvan.
 # Geen eigen geometrie. Vertrouwelijkheid: eigen aanduiding, anders die van het bovenliggende object.
 # Formeel standpunt staat bij de meeste omschrijvingen op false; daarom geen filter daarop.
 # Plat: alleen het object zelf als subject. schema:identifier is de CHOI;
@@ -31,7 +32,8 @@ CONSTRUCT {
         schema:startDate ?beginjaar ;
         schema:endDate ?eindjaar ;
         schema:conditionsOfAccess ?vertrouwelijk ;
-        schema:containedInPlace ?ligt_in .
+        schema:containedInPlace ?ligt_in ;
+        schema:isPartOf ?onderzoeksgebied_uri .
 }
 WHERE {
     GRAPH graph:instanties-rce {
@@ -42,7 +44,10 @@ WHERE {
                    BIND(CONCAT("complexnummer ", ?complexnummer) AS ?archis) }
         OPTIONAL { ?complex_uri ceo:heeftOmschrijving/ceo:omschrijving ?omschrijving }
         OPTIONAL { ?complex_uri ceo:ligtInObject ?ligt_in .
-                   OPTIONAL { ?ligt_in ceo:heeftVertrouwelijkAanduiding/skos:prefLabel ?vertrouwelijk_ouder } }
+                   OPTIONAL { ?ligt_in ceo:heeftVertrouwelijkAanduiding/skos:prefLabel ?vertrouwelijk_ouder }
+                   # ligt het complex in een vondstlocatie: het onderzoeksgebied daarvan (schema:isPartOf)
+                   OPTIONAL { ?ligt_in a ceo:Vondstlocatie ; ceo:ligtInObject ?onderzoeksgebied_uri .
+                              ?onderzoeksgebied_uri a ceo:ArcheologischOnderzoeksgebied } }
         OPTIONAL { ?complex_uri ceo:heeftVertrouwelijkAanduiding/skos:prefLabel ?vertrouwelijk_eigen }
     }
     BIND(COALESCE(?vertrouwelijk_eigen, ?vertrouwelijk_ouder) AS ?vertrouwelijk)

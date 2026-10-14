@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { queryFields, WEIGHT, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, bucketsOf, insideClause, nearClause, BINNEN, PARENT_FIELDS, STANDAARD_SOORTEN, fields, safeUrl, soortVan, vertrouwelijk, toParams, fromParams, describe, toCsv, BASE, EXPORT_MAX, setService, endpoint, DEFAULT_SERVICE } from '../web/search.js';
+import { queryFields, WEIGHT, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, bucketsOf, insideClause, nearClause, BINNEN, PARENT_FIELDS, INSIDE_FIELDS, STANDAARD_SOORTEN, erfgoedQuery, erfgoedDemoUrl, fields, safeUrl, soortVan, vertrouwelijk, toParams, fromParams, describe, toCsv, BASE, EXPORT_MAX, setService, endpoint, DEFAULT_SERVICE } from '../web/search.js';
 const periode = `${fields.temporalCoverage}.keyword`, materiaal = `${fields.material}.keyword`;
 const standaard = { terms: { '@id.soort': STANDAARD_SOORTEN } };
 test('Zoeken (query) en filteren (post_filter) blijven gescheiden; facets tellen zonder hun eigen filter', () => {
@@ -34,7 +34,8 @@ test('Soort: filter, facet en URI', () => {
 test('Binnen een object: via de drie relatievelden; in de buurt via geo_distance', async () => {
   const { WKT_FIELD } = await import('../web/geo.js');
   const uri = `${BASE}vondstlocatie/6129412`;
-  assert.deepEqual(insideClause(uri).bool.should, PARENT_FIELDS.map(field => ({ term: { [`${field}.keyword`]: uri } })));
+  assert.deepEqual(insideClause(uri).bool.should, INSIDE_FIELDS.map(field => ({ term: { [`${field}.keyword`]: uri } })));
+  assert.deepEqual(INSIDE_FIELDS, [...PARENT_FIELDS, fields.isPartOf], 'alle niveaus via isPartOf (onderzoeksgebied)');
   assert.deepEqual(nearClause({ lat: 52, lon: 5 }, 500, uri).bool.filter[0], { geo_distance: { distance: '500m', [WKT_FIELD]: { lat: 52, lon: 5 } } });
   assert.ok(BINNEN.test('vondstlocatie:6129412'));
   assert.ok(BINNEN.test('archeologischonderzoeksgebied:2041587'));
@@ -46,21 +47,23 @@ test('Binnen een object: via de drie relatievelden; in de buurt via geo_distance
   const body = buildQuery({ query: 'pot', binnen: 'vondstlocatie:6129412' }, { clause: insideClause(uri) });
   assert.deepEqual(body.query.bool.filter, [insideClause(uri)]);
 });
-test('Relaties: ouders op URI, inhoud per object en soort in één request', () => {
+test('Relaties: ouders op URI, inhoud per object en soort in één request; rijksmonumenten via erfgoed-sdo', () => {
   const vl = `${BASE}vondstlocatie/1`, og = `${BASE}archeologischonderzoeksgebied/2`;
-  const body = buildRelationQuery([og], [vl]);
+  const body = buildRelationQuery([og], [vl, og]);
   assert.deepEqual(body.post_filter, { terms: { '@id.keyword': [og] } });
   assert.deepEqual(body.query.bool.should[0], body.post_filter);
-  assert.deepEqual(body.query.bool.should[1], { terms: { [`${fields.containedInPlace}.keyword`]: [vl] } }, 'de aggregations moeten ook de inhoud zien');
-  assert.equal(Object.keys(body.aggs).length, 3);
-  assert.deepEqual(body.aggs.in1.aggs.ouders.terms.include, [vl]);
+  assert.deepEqual(body.query.bool.should.slice(1), INSIDE_FIELDS.map(field => ({ terms: { [`${field}.keyword`]: [vl, og] } })), 'de aggregation moet ook de inhoud zien');
+  assert.deepEqual(body.aggs.inhoud.filters.filters[og], insideClause(og), 'zelfde clause als Toon wat erin ligt: een object telt één keer');
   assert.deepEqual(buildRelationQuery([], []).post_filter.terms['@id.keyword'], ['-']);
-  const inhoud = inhoudVan({
-    in0: { ouders: { buckets: [{ key: vl, soort: { buckets: [{ key: 'archeologischcomplex', doc_count: 2 }] } }] } },
-    in1: { ouders: { buckets: [{ key: vl, soort: { buckets: [{ key: 'grondsporen', doc_count: 1 }] } }] } },
-    in2: { ouders: { buckets: [{ key: vl, soort: { buckets: [{ key: 'vondsten', doc_count: 5 }] } }] } }
-  });
+  const inhoud = inhoudVan({ inhoud: { buckets: {
+    [vl]: { doc_count: 8, soort: { buckets: [{ key: 'archeologischcomplex', doc_count: 2 }, { key: 'grondsporen', doc_count: 1 }, { key: 'vondsten', doc_count: 5 }] } },
+    [og]: { doc_count: 0, soort: { buckets: [] } }
+  } } });
   assert.deepEqual(inhoud.get(vl), { archeologischcomplex: 2, grondsporen: 1, vondsten: 5 });
+  assert.equal(inhoud.has(og), false);
+  const monument = `${BASE}rijksmonument/45708`;
+  assert.deepEqual(erfgoedQuery([monument]).query, { terms: { '@id.keyword': [monument] } });
+  assert.equal(erfgoedDemoUrl('532442'), 'https://erfgoed-sdo-elastic-demo.jolietjakeblues64.workers.dev/?q=%22532442%22&veld=Nummer&soort=rijksmonument');
 });
 test('Veldkeuze, filters, sortering, querylengte en resultaatvenster zijn begrensd', () => {
   assert.throws(() => buildQuery({ field: 'arbitrary' }));
@@ -103,7 +106,7 @@ test('CSV en toegang', () => {
   const source = { '@id': `${BASE}vondsten/1`, [fields.identifier]: ['1'], [fields.alternateName]: ['vondstnummer 9'], [fields.name]: ['=SOM(A1)'], [fields.spatialCoverage]: [`${BASE}vondstlocatie/2`], [fields.description]: ['regel 1\nmet "quote"; en meer'] };
   const csv = toCsv([{ _source: source }]);
   const [header, row] = csv.slice(1).split('\r\n');
-  assert.equal(header.split(';').length, 16);
+  assert.equal(header.split(';').length, 17);
   assert.match(row, /^Vondst;1;vondstnummer 9;'=SOM\(A1\);/);
   assert.ok(row.includes(`${BASE}vondstlocatie/2`));
   assert.match(csv, /"regel 1\nmet ""quote""; en meer"/);

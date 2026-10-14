@@ -8,7 +8,7 @@ PREFIX abr: <https://data.cultureelerfgoed.nl/term/id/abr/2/>
 # ceo:Vondsten -> schema:CreativeWork (446.665 objecten)
 # Door de mens gemaakt artefact. Ligt altijd in een vondstlocatie; de vindplek is niet
 # per se de plek van vervaardiging, daarom schema:spatialCoverage en niet locationCreated.
-# Vertrouwelijkheid komt van de vondstlocatie.
+# Vertrouwelijkheid komt van de vondstlocatie. schema:isPartOf is het onderzoeksgebied waarin die vondstlocatie ligt.
 # Plat: alleen het object zelf als subject. schema:identifier is de CHOI;
 # het Archis-vondstnummer staat als tekst in schema:alternateName, het aantal in schema:materialExtent,
 # de toestand (fragment, compleet) in schema:itemCondition.
@@ -38,7 +38,8 @@ CONSTRUCT {
         schema:materialExtent ?aantal ;
         schema:itemCondition ?toestand ;
         schema:conditionsOfAccess ?vertrouwelijk ;
-        schema:spatialCoverage ?vondstlocatie_uri .
+        schema:spatialCoverage ?vondstlocatie_uri ;
+        schema:isPartOf ?onderzoeksgebied_uri .
 }
 WHERE {
     GRAPH graph:instanties-rce {
@@ -53,6 +54,9 @@ WHERE {
         OPTIONAL { ?vondst_uri ceo:heeftStijlEnCultuur/ceo:heeftStijlEnCultuurNaam/skos:prefLabel ?stijl }
         OPTIONAL { ?vondst_uri ceo:heeftToestand/skos:prefLabel ?toestand }
         OPTIONAL { ?vondstlocatie_uri ceo:heeftVertrouwelijkAanduiding/skos:prefLabel ?vertrouwelijk }
+        # onderzoeksgebied van de vondstlocatie (schema:isPartOf), voor "alles in een onderzoeksgebied, alle niveaus"
+        OPTIONAL { ?vondstlocatie_uri ceo:ligtInObject ?onderzoeksgebied_uri .
+                   ?onderzoeksgebied_uri a ceo:ArcheologischOnderzoeksgebied }
     }
 
     # type: ABR-label, ABR-URI en bovenliggende begrippen; het rn-label alleen als ABR geen label heeft.

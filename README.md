@@ -21,6 +21,7 @@ De dataset wordt gevuld met CONSTRUCT-queries op het RCE CHO-endpoint, als job i
 
 Afspraken in de queries:
 
+- **Onderzoeksgebied, alle niveaus.** Vondsten, grondsporen en complexen in een vondstlocatie krijgen in `schema:isPartOf` het onderzoeksgebied waarin die vondstlocatie ligt.
 - **Plat.** Alleen het object zelf is subject. Elk subject wordt in Elasticsearch een eigen document; hulpknopen (bijv. `schema:PropertyValue` met een `#…`-URI) zouden als extra "objecten" in de index en de soortfacet verschijnen.
 - **Nummer** (`schema:identifier`) is de CHOI, gelijk aan het getal aan het eind van de URI. Archis-nummers staan als tekst in `schema:alternateName` ("vondstnummer 25404", "waarnemingsnummer 2963").
 - **Type** van complexen, grondsporen en vondsten: concept-URI in `schema:additionalType`, label in `schema:name`. Sommige concepten hebben twee labels (bijv. "aardewerk, handgevormd" en "Aardewerk, handgevormd:onbepaald"); dan zijn er twee namen.
@@ -34,7 +35,7 @@ Afspraken in de queries:
 ## Service
 
 ```text
-POST https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/archeologie-sdo/services/Archeologie-sdo-nl/_search
+POST https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/archeologie-sdo/services/Archeologie-sdo-abr/_search
 ```
 
 De service wordt gemaakt met de index template [`triply/elastic-service-archeologie.json`](triply/elastic-service-archeologie.json): dezelfde als `Erfgoed-sdo-nl3` (Nederlandse taalverwerking, `@id.soort` uit de URI, `geo:asWKT` als `geo_shape`, `identifier.getal` als `long`), plus `materialExtent.getal`. Aanmaken met een token met *Management access*, in PowerShell:
@@ -48,8 +49,9 @@ Templates worden alleen bij het aanmaken gelezen; een wijziging betekent de serv
 ## Wat de demo doet
 
 - **Standaard zonder vondsten en grondsporen.** Samen ca. 540.000 van de 1,1 miljoen objecten; anders bepalen ze elk resultaat. Zonder soortfilter en zonder gekozen object staat in `post_filter` een `terms` op `@id.soort` met de andere vier soorten. De soortfacet telt zonder dat filter.
-- **Ligt in** bij elk resultaat: het object uit `containedInPlace`, `locationCreated` of `spatialCoverage`. Een rijksmonument staat in `erfgoed-sdo` en krijgt alleen een Linked Data-link.
-- **Bevat** bij een onderzoeksgebied, vondstlocatie of terrein: hoeveel objecten erin liggen, per soort, met **Toon wat erin ligt** (`binnen=vondstlocatie:6129412`). Dat is één extra request voor de hele pagina: een `terms`-aggregation op de drie relatievelden, beperkt tot de URI's op de pagina.
+- **Ligt in** bij elk resultaat: het object uit `containedInPlace`, `locationCreated` of `spatialCoverage`. Vondsten, grondsporen en complexen in een vondstlocatie tonen ook het **Onderzoeksgebied** (`isPartOf`).
+- **Rijksmonument** (waarin een terrein ligt): staat in `erfgoed-sdo`. Nummer en naam komen met een tweede request uit de service `Erfgoed-sdo-nl3`; de link opent het monument in de [erfgoeddemo](https://erfgoed-sdo-elastic-demo.jolietjakeblues64.workers.dev/).
+- **Bevat** bij een onderzoeksgebied, vondstlocatie of terrein: hoeveel objecten erin liggen, per soort, met **Toon wat erin ligt** (`binnen=vondstlocatie:6129412`). Bij een onderzoeksgebied zijn dat alle niveaus: vondstlocaties, en via `isPartOf` ook de vondsten, grondsporen en complexen daarin. Dat is één extra request voor de hele pagina: een `filters`-aggregation met per object dezelfde clause als **Toon wat erin ligt**, zodat een object één keer telt.
 - **In de buurt** (`binnen=rond:archeologischonderzoeksgebied:2041587:1000`): `geo_distance` vanaf het (zwaarte)punt, voor objecten met een geometrie.
 - Facetten: soort, naam of type, periode, materiaal, stijl en cultuur, waardering, provincie, plaats, toegang. Sorteren op relevantie (naam telt 3×), naam, plaats, periode, soort of nummer.
 
@@ -96,6 +98,5 @@ npx wrangler deploy
 ## Bekende beperkingen
 
 - Complexen, grondsporen en vondsten hebben geen locatie; vondstlocaties en terreinen alleen een geleend vlak. Dat vlak is het hele onderzoeksgebied of rijksmonument, niet de vindplek.
-- **Toon wat erin ligt** gaat één niveau diep: in een onderzoeksgebied zie je de vondstlocaties, niet de vondsten daarin.
 - Facetten tonen de 100 meest voorkomende waarden.
 - De kaart toont alleen de resultaten van de huidige pagina (25).
