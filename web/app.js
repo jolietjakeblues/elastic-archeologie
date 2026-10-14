@@ -260,7 +260,13 @@ function renderFilters(aggregations, context) {
   }
   if (Object.keys(state.filters).length || state.binnen || state.jaar) $('active-filters').append(button('Wis alle filters', () => { state.filters = {}; state.binnen = null; state.jaar = null; state.page = 0; syncForm(); run(); }));
   // Standaard zonder vondsten en grondsporen: maak dat zichtbaar en omkeerbaar.
-  if (verbergt(state)) $('active-filters').append(el('span', 'Zonder vondsten en grondsporen.', 'hint'), button('Toon alle soorten', () => { state.filters.soort = Object.keys(soorten); state.page = 0; run(); }, 'link-button'));
+  // Bij bladeren zonder zoekvraag: zeg hoeveel vondsten en grondsporen er niet getoond worden.
+  if (verbergt(state)) {
+    const perSoort = Object.fromEntries((bucketsOf(aggregations.soort)?.buckets ?? []).map(({ key, doc_count }) => [key, doc_count]));
+    const delen = VERBORGEN.filter(soort => perSoort[soort]).map(soort => aantalSoort(soort, perSoort[soort]));
+    const tekst = delen.length ? `${delen.join(' en ')} niet getoond (zonder zoekvraag staan die standaard uit).` : 'Vondsten en grondsporen staan zonder zoekvraag standaard uit.';
+    $('active-filters').append(el('span', `${tekst} `, 'hint'), button('Toon alle soorten', () => { state.filters.soort = Object.keys(soorten); state.page = 0; run(); }, 'link-button'));
+  }
   $('facets').replaceChildren();
   for (const [key, label] of Object.entries(facets)) {
     const group = el('details'); group.open = ['soort', 'temporalCoverage', 'material', 'addressRegion'].includes(key);
@@ -277,7 +283,7 @@ function renderFilters(aggregations, context) {
       box.type = 'checkbox'; box.checked = isActive(key, bucket.key); box.addEventListener('change', () => toggleFilter(key, bucket.key));
       const approximate = bucket.doc_count_error_upper_bound > 0;
       const name = el('span', valueLabel(key, bucket.key), 'facet-name');
-      if (key === 'soort') { name.dataset.soort = bucket.key; if (!state.filters.soort?.length && !state.binnen && VERBORGEN.includes(bucket.key)) name.append(el('span', ' (verborgen)', 'muted')); }
+      if (key === 'soort') { name.dataset.soort = bucket.key; if (verbergt(state) && VERBORGEN.includes(bucket.key)) name.append(el('span', ' (niet getoond)', 'muted')); }
       option.append(box, name, el('span', bucket.doc_count == null ? '' : `${approximate ? '≈ ' : ''}${format(bucket.doc_count)}`, 'facet-count'));
       item.append(option); list.append(item);
     }

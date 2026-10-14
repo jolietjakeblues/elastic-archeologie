@@ -27,7 +27,7 @@
           <label for="tot">tot</label><input id="tot" type="number" inputmode="numeric" min="-1000000" max="2100" step="1" placeholder="bijv. 500">
           <label for="jaarmodus" class="visually-hidden">Hoe</label><select id="jaarmodus"><option value="overlapt">datering valt er (deels) in</option><option value="binnen">datering valt er helemaal in</option></select></div>
         <p id="jaar-hint" class="hint">Negatief is vóór Christus: <strong>-500 tot 500</strong> is 500 v. Chr. tot 500 n. Chr. Brede dateringen (bijv. Prehistorie – Nieuwe Tijd) vallen bijna altijd <em>deels</em> in een periode; kies <em>helemaal</em> voor alleen nauw gedateerde objecten.</p></fieldset>
-      <p id="syntax" class="hint">Combineer met AND, OR, NOT (in hoofdletters) en haakjes. Gebruik quotes voor een exacte woordcombinatie. Vondsten en grondsporen staan standaard uit; vink ze aan bij <strong>Soort</strong>. <button type="button" id="help-open" class="link-button">Zoekhulp en meer voorbeelden</button></p>
+      <p id="syntax" class="hint">Combineer met AND, OR, NOT (in hoofdletters) en haakjes. Gebruik quotes voor een exacte woordcombinatie. Zonder zoekvraag staan vondsten en grondsporen uit; met een zoekvraag, een vinkje bij <strong>Soort</strong> of <strong>Toon wat erin ligt</strong> zie je ze wel. <button type="button" id="help-open" class="link-button">Zoekhulp en meer voorbeelden</button></p>
       <p id="query-tip" class="tip" hidden></p>
       <div class="examples"><span>Probeer:</span>
         <button type="button" data-example="grafheuvel">grafheuvel</button>
@@ -59,7 +59,7 @@
         <ul class="legend" aria-label="Legenda"><li data-soort="archeologischonderzoeksgebied">Onderzoeksgebied</li><li data-soort="vondstlocatie">Vondstlocatie</li><li data-soort="archeologischterrein">Archeologisch terrein</li><li data-soort="binnen">Gekozen object of afstand</li></ul>
         <p id="map-info" class="hint">Na het zoeken verschijnen de resultaten van deze pagina met een locatie op de kaart.</p></section>
     </div>
-    <details class="technical"><summary>Toon Elasticsearch-query</summary><h2>In gewone taal</h2><ul id="query-explain"><li>Er is nog geen zoekactie uitgevoerd.</li></ul><h2>JSON</h2><p>De request die naar de Elasticsearch-service is gestuurd.</p><pre id="query-json">Er is nog geen zoekactie uitgevoerd.</pre><h2>Standaard zonder vondsten en grondsporen</h2><p>Zonder soortfilter en zonder gekozen object staat in <code>post_filter</code> een <code>terms</code>-filter op <code>@id.soort</code> met de vier andere soorten. De soortfacet telt zonder dat filter, zodat je ziet hoeveel vondsten en grondsporen er zijn.</p></details>
+    <details class="technical"><summary>Toon Elasticsearch-query</summary><h2>In gewone taal</h2><ul id="query-explain"><li>Er is nog geen zoekactie uitgevoerd.</li></ul><h2>JSON</h2><p>De request die naar de Elasticsearch-service is gestuurd.</p><pre id="query-json">Er is nog geen zoekactie uitgevoerd.</pre><h2>Bladeren zonder vondsten en grondsporen</h2><p>Zonder zoekvraag, soortfilter en gekozen object staat in <code>post_filter</code> een <code>terms</code>-filter op <code>@id.soort</code> met de vier andere soorten. De soortfacet telt zonder dat filter, zodat je ziet hoeveel vondsten en grondsporen er zijn.</p></details>
   <dialog id="help" aria-labelledby="help-title">
     <div class="help-head"><h2 id="help-title">Zoekhulp</h2><button type="button" id="help-close" aria-label="Sluit zoekhulp">×</button></div>
     <p>De zoekbalk gebruikt de Elasticsearch <code>query_string</code>-syntax. Klik op een voorbeeld om het meteen te proberen. Er wordt gezocht in het veld dat bij <strong>Zoek in</strong> staat.</p>
@@ -75,7 +75,7 @@
         <tr><td>Vondst</td><td>ca. 447.000 vondsten met type, materiaal, periode, aantal en toestand</td><td>vondstlocatie</td></tr>
       </tbody>
     </table>
-    <p>Vondsten en grondsporen staan standaard uit, anders bepalen ze elk zoekresultaat. Vink ze aan bij <strong>Soort</strong>, of kies bij een vondstlocatie <strong>Toon wat erin ligt</strong>.</p>
+    <p>Bij bladeren zonder zoekvraag staan vondsten en grondsporen uit, anders bestaat het overzicht vooral uit losse vondsten. Zoek je op een woord, vink je ze aan bij <strong>Soort</strong> of kies je <strong>Toon wat erin ligt</strong>, dan zie je ze wel.</p>
     <h3>Voorbeelden</h3>
     <ul>
       <li><button type="button" data-example="terp OR wierde" data-soort="archeologischterrein">terp OR wierde</button> in archeologische terreinen</li>
