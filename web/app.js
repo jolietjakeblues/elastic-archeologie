@@ -63,7 +63,9 @@ async function resolveContext(binnen) {
     context = { soort, nummer, uri, meters, clause: nearClause(geometry.point, meters, uri), label: `${format(meters)} m rond ${soortLabel(soort).toLowerCase()} ${nummer}${naam ? ` “${naam}”` : ''}`, summary: 'alles met een locatie dat (deels) binnen deze afstand van het punt van het object ligt (geo_distance)', geometry, circle: { point: geometry.point, meters } };
   } else {
     const summary = soort === 'archeologischonderzoeksgebied' ? 'alles wat hierin ligt, ook de vondsten, grondsporen en complexen in de vondstlocaties van dit gebied (containedInPlace of isPartOf)' : 'de objecten die hier direct in liggen (containedInPlace, locationCreated of spatialCoverage)';
-    context = { soort, nummer, uri, clause: insideClause(uri), label: `${soortLabel(soort).toLowerCase()} “${naam || 'zonder naam'}” (${nummer})`, summary, geometry };
+    // Het onderzoeksgebied erboven (vondstlocatie: containedInPlace; complex, spoor, vondst: isPartOf), voor de knop "alle niveaus".
+    const onderzoeksgebied = soort === 'archeologischonderzoeksgebied' ? null : [...values(source[fields.containedInPlace]), ...values(source[fields.isPartOf])].map(value => /\/archeologischonderzoeksgebied\/(\d{1,10})$/.exec(value)?.[1]).find(Boolean) ?? null;
+    context = { soort, nummer, uri, clause: insideClause(uri), label: `${soortLabel(soort).toLowerCase()} “${naam || 'zonder naam'}” (${nummer})`, summary, geometry, onderzoeksgebied };
   }
   contexts.set(binnen, context);
   return context;
@@ -247,6 +249,7 @@ function renderMap(hits) {
   else {
     $('map-info').append(document.createTextNode(`Op de kaart: ${total} van de ${hits.length} getoonde resultaten. `));
     if (total < hits.length) $('map-info').append(document.createTextNode(total ? 'De andere hebben geen locatie. ' : 'Deze resultaten hebben geen locatie. '));
+    if (contextLayer.getLayers().length) $('map-info').append(document.createTextNode('De zwarte stippellijn is het gekozen object of de gekozen afstand. '));
     if (total < hits.length && !state.locatie) $('map-info').append(button('Toon alleen resultaten met een locatie', () => { state.locatie = true; state.page = 0; syncForm(); run(); }, 'link-button'));
   }
   return total;
@@ -385,6 +388,7 @@ function renderContext(context) {
   // Het rijksmonument zelf staat in de erfgoeddemo; de andere objecten in deze demo.
   if (context.soort === 'rijksmonument') { if (context.rmnr) actions.append(link(`Rijksmonument ${context.rmnr} in de erfgoeddemo`, erfgoedDemoUrl(context.rmnr))); }
   else actions.append(button(`Toon ${soortLabel(context.soort).toLowerCase()} ${context.nummer} zelf`, () => showObject(context.soort, context.nummer)));
+  if (context.onderzoeksgebied) actions.append(button(`Alles in onderzoeksgebied ${context.onderzoeksgebied} (alle niveaus)`, () => openBinnen(`archeologischonderzoeksgebied:${context.onderzoeksgebied}`)));
   actions.append(button('Weer overal zoeken', () => setBinnen(null)));
   $('context').append(text, actions);
 }

@@ -184,7 +184,7 @@ export function inhoudVan(aggregations = {}) {
 // Rijksmonumenten uit erfgoed-sdo opzoeken op URI: nummer en naam.
 export const erfgoedQuery = uris => ({ size: Math.min(uris.length, 100), timeout: '15s', _source: ['@id', fields.identifier, fields.name], query: { terms: { '@id.keyword': uris.length ? uris : ['-'] } } });
 export const erfgoedDemoUrl = nummer => `${ERFGOED_DEMO}?${new URLSearchParams({ q: `"${nummer}"`, veld: 'Nummer', soort: 'rijksmonument' })}`;
-export const lookupQuery = (soort, nummer) => ({ size: 1, query: { bool: { filter: [{ term: { [SOORT_FIELD]: soort } }, { term: { [`${fields.identifier}.keyword`]: nummer } }] } }, _source: ['@id', fields.identifier, fields.name, WKT_FIELD] });
+export const lookupQuery = (soort, nummer) => ({ size: 1, query: { bool: { filter: [{ term: { [SOORT_FIELD]: soort } }, { term: { [`${fields.identifier}.keyword`]: nummer } }] } }, _source: ['@id', fields.identifier, fields.name, fields.containedInPlace, fields.isPartOf, WKT_FIELD] });
 // Export: dezelfde zoekvraag, filters en sortering, maximaal EXPORT_MAX resultaten, zonder geometrie, facets en highlights.
 export function buildExportQuery(state = {}, context) {
   const { search, filters, sort, verberg } = validate({ ...state, page: 0 }, context);
