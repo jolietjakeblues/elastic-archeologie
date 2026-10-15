@@ -4,6 +4,17 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Archeologie SDO/Elastic demo</title>
   <meta name="description" content="Verken archeologische onderzoeksgebieden, vondstlocaties, terreinen, complexen, grondsporen en vondsten via Linked Data en Elasticsearch.">
+  <meta name="robots" content="noindex">
+  <link rel="canonical" href="https://elastic-archeologie.jolietjakeblues64.workers.dev/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="favicon-512.png">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="nl_NL">
+  <meta property="og:site_name" content="Archeologie SDO/Elastic demo">
+  <meta property="og:title" content="Archeologie SDO/Elastic demo">
+  <meta property="og:description" content="Verken archeologische onderzoeksgebieden, vondstlocaties, terreinen, complexen, grondsporen en vondsten via Linked Data en Elasticsearch.">
+  <meta property="og:url" content="https://elastic-archeologie.jolietjakeblues64.workers.dev/">
+  <meta property="og:image" content="https://elastic-archeologie.jolietjakeblues64.workers.dev/favicon-512.png">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <link rel="stylesheet" href="style.css"><script type="module" src="app.js"></script>
@@ -36,7 +47,8 @@
         <button type="button" data-example="" data-soort="vondsten" data-groep="metaal" data-van="-800" data-tot="-12" data-jaarmodus="binnen">Metalen vondsten uit de IJzertijd (jaartallen)</button>
         <button type="button" data-example="" data-binnen="vondstlocatie:6129412">Alles in vondstlocatie Kletterstraat (Lochem)</button>
         <button type="button" data-example="" data-binnen="archeologischterrein:6049046">Complexen in terrein Domplein (Utrecht)</button>
-        <button type="button" data-example="" data-binnen="rond:archeologischonderzoeksgebied:2041587:1000">Binnen 1 km van een onderzoeksgebied</button>
+        <button type="button" data-example="" data-binnen="archeologischonderzoeksgebied:2024283">Alles in onderzoeksgebied Slabroekse Heide (alle niveaus)</button>
+        <button type="button" data-example="" data-binnen="rond:archeologischonderzoeksgebied:2024283:1000">Binnen 1 km van onderzoeksgebied Slabroekse Heide</button>
       </div>
     </form>
   </div></div>
@@ -51,12 +63,13 @@
         <div id="facets"><p class="muted">Na het zoeken verschijnen hier de beschikbare filters.</p></div>
       </aside>
       <section id="results-panel" aria-labelledby="results-heading"><div class="results-title"><h2 id="results-heading">Resultaten</h2><span id="page-info"></span></div>
-        <div class="toolbar"><label for="sort">Sorteer op</label><select id="sort" aria-describedby="sort-hint"></select><button type="button" id="share">Kopieer link</button><button type="button" id="export" disabled>Download CSV</button></div>
+        <div class="toolbar"><label for="sort">Sorteer op</label><select id="sort" aria-describedby="sort-hint"></select><label class="locatie-toggle"><input type="checkbox" id="locatie"> Alleen met locatie op de kaart</label><button type="button" id="share">Kopieer link</button><button type="button" id="export" disabled>Download CSV</button></div>
         <p id="sort-hint" class="hint">Bij <strong>Relevantie</strong> staat het best passende resultaat bovenaan. Een treffer in de naam of het type telt 3× zo zwaar. <button type="button" class="link-button" data-help="volgorde">Hoe werkt de volgorde?</button></p>
         <p id="export-info" class="hint" aria-live="polite"></p>
         <div id="active-filters"></div><div id="results"><p class="empty">Zoek op woorden, een plaats, een periode of een nummer, of kies een voorbeeld.</p></div><nav id="pagination" aria-label="Resultaatpagina’s" hidden><button id="previous" type="button">Vorige</button><span id="page-number"></span><button id="next" type="button">Volgende</button></nav></section>
       <section id="map-panel" aria-labelledby="map-heading"><div class="results-title"><h2 id="map-heading">Kaart</h2></div><div id="map" role="region" aria-label="Kaart met zoekresultaten"></div>
-        <ul class="legend" aria-label="Legenda"><li data-soort="archeologischonderzoeksgebied">Onderzoeksgebied</li><li data-soort="vondstlocatie">Vondstlocatie</li><li data-soort="archeologischterrein">Archeologisch terrein</li><li data-soort="binnen">Gekozen object of afstand</li></ul>
+        <ul class="legend" aria-label="Legenda"><li data-soort="archeologischonderzoeksgebied">Onderzoeksgebied (eigen vlak)</li><li data-soort="vondstlocatie">Vondstlocatie (vlak van het onderzoeksgebied)</li><li data-soort="archeologischterrein">Archeologisch terrein (vlak van het rijksmonument)</li><li data-soort="binnen">Gekozen object of afstand</li></ul>
+        <p class="hint kaart-uitleg">Alleen <strong>onderzoeksgebieden</strong> hebben een eigen vlak. Een vondstlocatie of terrein staat er alleen op als het in een onderzoeksgebied of rijksmonument ligt, met het vlak dáárvan. Complexen, grondsporen en vondsten hebben geen locatie; die vind je via <strong>Toon wat erin ligt</strong> bij een onderzoeksgebied.</p>
         <p id="map-info" class="hint">Na het zoeken verschijnen de resultaten van deze pagina met een locatie op de kaart.</p></section>
     </div>
     <details class="technical"><summary>Toon Elasticsearch-query</summary><h2>In gewone taal</h2><ul id="query-explain"><li>Er is nog geen zoekactie uitgevoerd.</li></ul><h2>JSON</h2><p>De request die naar de Elasticsearch-service is gestuurd.</p><pre id="query-json">Er is nog geen zoekactie uitgevoerd.</pre><h2>Bladeren zonder vondsten en grondsporen</h2><p>Zonder zoekvraag, soortfilter en gekozen object staat in <code>post_filter</code> een <code>terms</code>-filter op <code>@id.soort</code> met de vier andere soorten. De soortfacet telt zonder dat filter, zodat je ziet hoeveel vondsten en grondsporen er zijn.</p></details>
@@ -100,22 +113,23 @@
     </table>
     <h3>Binnen een object of in de buurt</h3>
     <ul>
-      <li>Bij een onderzoeksgebied, vondstlocatie of terrein staat bij <strong>Bevat</strong> hoeveel objecten er direct in liggen, met de knop <strong>Toon wat erin ligt</strong>. Dat gaat via de relaties in de data, niet ruimtelijk.</li>
+      <li>Bij een onderzoeksgebied, vondstlocatie of terrein staat bij <strong>Bevat</strong> hoeveel objecten erin liggen, met de knop <strong>Toon wat erin ligt</strong>. Bij een vondstlocatie of terrein is dat wat er direct in ligt; bij een onderzoeksgebied alle niveaus (vondstlocaties en de vondsten, grondsporen en complexen daarin). Dat gaat via de relaties in de data, niet ruimtelijk.</li>
       <li>Bij objecten met een locatie zoekt <strong>In de buurt</strong> alles met een locatie binnen 500 m; de afstand is daarna aan te passen.</li>
-      <li>Een vondstlocatie heeft geen eigen locatie. Als hij in een onderzoeksgebied ligt, toont de demo het vlak van dat gebied. Dat is dus niet de vindplek zelf.</li>
+      <li><strong>Wat staat er op de kaart?</strong> Alleen onderzoeksgebieden hebben een eigen vlak. Een vondstlocatie krijgt het vlak van het onderzoeksgebied waarin hij ligt (ca. 40.000 van de 112.000), een terrein het vlak van zijn rijksmonument (1.812 van de 13.025). Dat is niet de vindplek zelf. Complexen, grondsporen en vondsten hebben geen locatie. Vink <strong>Alleen met locatie op de kaart</strong> aan om alleen kaartbare resultaten te zien.</li>
     </ul>
     <h3>Goed om te weten</h3>
     <ul>
       <li><strong>Nummer</strong> is de CHOI, het getal aan het eind van de URI. Archis-nummers (waarnemings-, vondstmeldings-, vondst-, complex- en monumentnummer) staan apart en zijn te vinden via <strong>Zoek in: Nummer</strong>.</li>
       <li><strong>Toegang</strong>: objecten die niet openbaar zijn krijgen een label. Dit is een testopzet.</li>
       <li><strong>Datering:</strong> de periode komt uit ABR, met jaartallen (bijv. Romeinse Tijd = 12 v. Chr. – 449 n. Chr.). Filter op jaartal met <strong>Van</strong> en <strong>tot</strong>, of sorteer op <strong>Periode (oud → jong)</strong>.</li>
-      <li><strong>ABR-hiërarchie:</strong> de facet <strong>Typegroep</strong> bevat de bovenliggende ABR-begrippen van het type (bijv. "aardewerk:onbepaald"), en <strong>Materiaal</strong> ook de groepen (bijv. ijzer → metaal → anorganisch). Kies "metaal" en je vindt ijzer, brons, koper enz. Elk type heeft een link naar het ABR-begrip.</li>
-      <li>Operatoren in hoofdletters; zonder operator betekent een spatie OR. Hoofdletters en accenten maken niet uit.</li>
+      <li><strong>ABR-hiërarchie:</strong> de facet <strong>Typegroep (ABR), verwerving, AMK</strong> bevat bij vondsten, grondsporen en complexen de bovenliggende ABR-begrippen van het type (bijv. "aardewerk:onbepaald"), en <strong>Materiaal</strong> ook de groepen (bijv. ijzer → metaal → anorganisch). Kies "metaal" en je vindt ijzer, brons, koper enz. Elk type heeft een link naar het ABR-begrip. Bij vondstlocaties staat in dezelfde facet de wijze van verwerving, bij onderzoeksgebieden de AMK-indicatie.</li>
+      <li>Operatoren in hoofdletters; zonder operator betekent een spatie OR. Hoofdletters en accenten maken niet uit. Een schuine streep (<code>greppel/sloot</code>) is een gewoon teken; reguliere expressies (<code>/…/</code>) staan uit.</li>
+      <li><strong>Link naar één object:</strong> met de knop <strong>Link</strong> bij een resultaat kopieer je een korte link (<code>?object=vondstlocatie:6129412</code>).</li>
     </ul>
   </dialog>
   </div>
   </main>
   <footer class="site-footer"><div class="bar"><div class="wrap"><p><strong>Dit is een demo.</strong> Bouw hier geen applicaties of andere afhankelijkheden op. De scripts, index en service kunnen zonder aankondiging wijzigen of verdwijnen.</p></div></div>
-    <div class="wrap"><p>Deze demo gebruikt de dataset <a href="https://linkeddata.cultureelerfgoed.nl/rce/archeologie-sdo" target="_blank" rel="noopener noreferrer">archeologie-sdo</a> van de Rijksdienst voor het Cultureel Erfgoed. <span id="service-info"></span></p></div></footer>
+    <div class="wrap"><p>Deze demo gebruikt de dataset <a href="https://linkeddata.cultureelerfgoed.nl/rce/archeologie-sdo" target="_blank" rel="noopener noreferrer">archeologie-sdo</a> van de Rijksdienst voor het Cultureel Erfgoed. Broncode en uitleg: <a href="https://github.com/jolietjakeblues/elastic-archeologie" target="_blank" rel="noopener noreferrer">GitHub</a>. Zie ook de <a href="https://erfgoed-sdo-elastic-demo.jolietjakeblues64.workers.dev/" target="_blank" rel="noopener noreferrer">Erfgoed SDO/Elastic demo</a> (rijksmonumenten, gezichten, werelderfgoed). <span id="service-info"></span></p></div></footer>
 </body>
 </html>

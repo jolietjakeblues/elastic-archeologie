@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { jaarClause, jaarTekst, queryFields, WEIGHT, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, bucketsOf, insideClause, nearClause, BINNEN, PARENT_FIELDS, INSIDE_FIELDS, STANDAARD_SOORTEN, erfgoedQuery, erfgoedDemoUrl, fields, safeUrl, soortVan, vertrouwelijk, toParams, fromParams, describe, toCsv, BASE, EXPORT_MAX, setService, endpoint, DEFAULT_SERVICE } from '../web/search.js';
+import { veiligeZoekvraag, locatieClause, OBJECT, objectUrl, jaarClause, jaarTekst, queryFields, WEIGHT, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, bucketsOf, insideClause, nearClause, BINNEN, PARENT_FIELDS, INSIDE_FIELDS, STANDAARD_SOORTEN, erfgoedQuery, erfgoedDemoUrl, fields, safeUrl, soortVan, vertrouwelijk, toParams, fromParams, describe, toCsv, BASE, EXPORT_MAX, setService, endpoint, DEFAULT_SERVICE } from '../web/search.js';
 const periode = `${fields.temporalCoverage}.keyword`, materiaal = `${fields.material}.keyword`;
 const standaard = { terms: { '@id.soort': STANDAARD_SOORTEN } };
 test('Zoeken (query) en filteren (post_filter) blijven gescheiden; facets tellen zonder hun eigen filter', () => {
@@ -91,12 +91,12 @@ test('Weging: alleen de naam telt zwaarder, alleen in Alles en Exact', () => {
   assert.deepEqual(queryFields('Nummer'), [fields.identifier, fields.alternateName]);
 });
 test('Deelbare URL: heen en terug, onbekende waarden worden genegeerd', () => {
-  const state = { query: 'aardewerk', field: 'Naam', filters: { soort: ['vondsten'], temporalCoverage: ['Romeinse Tijd'] }, page: 2, sort: 'naam', jokers: false, binnen: 'vondstlocatie:6129412', jaar: null };
+  const state = { query: 'aardewerk', field: 'Naam', filters: { soort: ['vondsten'], temporalCoverage: ['Romeinse Tijd'] }, page: 2, sort: 'naam', jokers: false, binnen: 'vondstlocatie:6129412', jaar: null, locatie: false };
   const search = toParams(state).toString();
   assert.equal(search, 'q=aardewerk&veld=Naam&binnen=vondstlocatie%3A6129412&soort=vondsten&periode=Romeinse+Tijd&sorteer=naam&pagina=3');
   assert.deepEqual(fromParams(`?${search}`), { state, active: true });
   const bad = fromParams('?veld=__proto__&sorteer=x&pagina=-4&onbekend=1&binnen=gezicht:1&soort=rijksmonument');
-  assert.deepEqual(bad.state, { query: '', field: 'Alles', filters: {}, sort: 'relevantie', page: 0, jokers: false, binnen: null, jaar: null });
+  assert.deepEqual(bad.state, { query: '', field: 'Alles', filters: {}, sort: 'relevantie', page: 0, jokers: false, binnen: null, jaar: null, locatie: false });
   assert.equal(toParams({}).toString(), '');
 });
 test('Service: standaard of een veilige naam via ?service=', () => {
@@ -131,11 +131,28 @@ test('Datering: jaartallen uit ABR, (deels) of helemaal in een periode; in de qu
   assert.throws(() => buildQuery({ jaar: { van: 1.5 } }), /Ongeldig jaartal/);
   assert.throws(() => buildQuery({ jaar: {} }), /Ongeldig jaartal/);
   assert.deepEqual(buildQuery({ sort: 'periode' }).sort, [{ [start]: { order: 'asc', missing: '_last' } }, { [eind]: { order: 'asc', missing: '_last' } }]);
-  const state = { query: '', field: 'Alles', filters: { material: ['metaal'] }, page: 0, sort: 'relevantie', jokers: false, binnen: null, jaar: { van: -800, tot: -12, modus: 'binnen' } };
+  const state = { query: '', field: 'Alles', filters: { material: ['metaal'] }, page: 0, sort: 'relevantie', jokers: false, binnen: null, jaar: { van: -800, tot: -12, modus: 'binnen' }, locatie: false };
   assert.equal(toParams(state).toString(), 'van=-800&tot=-12&jaarmodus=binnen&materiaal=metaal');
   assert.deepEqual(fromParams(`?${toParams(state)}`), { state, active: true });
   assert.equal(fromParams('?van=600&tot=5').state.jaar, null, 'van na tot wordt genegeerd');
   assert.equal(fromParams('?van=abc').state.jaar, null);
   assert.equal(jaarTekst(-12), '12 v. Chr.'); assert.equal(jaarTekst(449), '449 n. Chr.'); assert.equal(jaarTekst(-1000000), '1.000.000 v. Chr.');
   assert.match(describe({ jaar: { van: -500, tot: 500, modus: 'binnen' } }).join(' '), /helemaal valt in de periode 500 v\. Chr\. – 500 n\. Chr\./);
+});
+test('Veiligheid en deelbaarheid: geen reguliere expressies, alleen met locatie, korte objectlink', () => {
+  assert.equal(veiligeZoekvraag('greppel/sloot'), String.raw`greppel\/sloot`);
+  assert.equal(veiligeZoekvraag('/.*a.*/'), String.raw`\/.*a.*\/`, 'een regex wordt gewone tekst');
+  assert.equal(veiligeZoekvraag(String.raw`a\/b`), String.raw`a\/b`, 'al geëscapet blijft gelijk');
+  assert.equal(buildQuery({ query: '/.*a.*/' }).query.query_string.query, String.raw`\/.*a.*\/`);
+  assert.deepEqual(buildQuery({ locatie: true }).query.bool.filter, [locatieClause()]);
+  assert.equal(toParams({ locatie: true }).toString(), 'kaart=1');
+  assert.equal(fromParams('?kaart=1').state.locatie, true);
+  assert.match(describe({ locatie: true }).join(' '), /locatie op de kaart/);
+  const { state, active } = fromParams('?object=vondstlocatie:6129412');
+  assert.equal(active, true);
+  assert.deepEqual([state.query, state.field, state.filters], ['"6129412"', 'Nummer', { soort: ['vondstlocatie'] }]);
+  assert.equal(fromParams('?object=rijksmonument:1').active, false, 'alleen soorten uit deze index');
+  assert.equal(fromParams('?object=vondsten:1;drop').active, false);
+  assert.ok(OBJECT.test('vondsten:123'));
+  assert.equal(objectUrl('vondsten', '123'), '?object=vondsten%3A123');
 });

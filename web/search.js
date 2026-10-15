@@ -48,7 +48,7 @@ const weighted = key => WEIGHTED.some(base => key === base || key === `${base}.e
 export function queryFields(field) {
   return field === 'Alles' || field === 'Exact' ? searchFields[field].map(key => (weighted(key) ? `${key}^${WEIGHT}` : key)) : searchFields[field];
 }
-export const facets = { soort: 'Soort', name: 'Naam of type', keywords: 'Typegroep (ABR) of kenmerk', temporalCoverage: 'Periode', material: 'Materiaal (met groepen)', genre: 'Stijl en cultuur', category: 'Waardering', addressRegion: 'Provincie', addressLocality: 'Plaats', conditionsOfAccess: 'Toegang' };
+export const facets = { soort: 'Soort', name: 'Naam of type', keywords: 'Typegroep (ABR), verwerving, AMK', temporalCoverage: 'Periode', material: 'Materiaal (met groepen)', genre: 'Stijl en cultuur', category: 'Waardering', addressRegion: 'Provincie', addressLocality: 'Plaats', conditionsOfAccess: 'Toegang' };
 // Sorteren op nummer gebruikt identifier.getal (long); het gewone veld is tekst, dan komt 5 na 10040.
 export const sorts = {
   relevantie: { label: 'Relevantie', sort: null },
@@ -98,7 +98,12 @@ function filterClauses(filters, skip, verberg) {
   if (skip !== 'soort' && verberg) clauses.push(clauseFor('soort', STANDAARD_SOORTEN));
   return clauses;
 }
-function validate({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null }, context) {
+// Alleen objecten met een (eigen of geleende) geometrie: het geo_shape-veld bestaat.
+export const locatieClause = () => ({ exists: { field: WKT_FIELD } });
+// Een schuine streep start in query_string een reguliere expressie (/.*a.*/), die de service zwaar kan belasten.
+// Daarom wordt elke niet-geëscapete / een gewoon teken; "greppel/sloot" werkt dan ook.
+export const veiligeZoekvraag = query => query.replace(/(?<!\\)\//g, '\\/');
+function validate({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null, locatie = false }, context) {
   if (!Object.hasOwn(searchFields, field)) throw new Error('Onbekend zoekveld.');
   if (!Object.hasOwn(sorts, sort)) throw new Error('Onbekende sortering.');
   if (!Number.isInteger(page) || page < 0 || (page + 1) * PAGE_SIZE > MAX_WINDOW) throw new Error('Verfijn je zoekvraag om meer resultaten te bekijken.');
@@ -113,9 +118,9 @@ function validate({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, s
   }
   if (jaar != null && (!geldigJaar(jaar.van) || !geldigJaar(jaar.tot) || (jaar.van == null && jaar.tot == null) || !Object.hasOwn(JAARMODI, jaar.modus ?? 'overlapt'))) throw new Error('Ongeldig jaartal.');
   if (jaar?.van != null && jaar?.tot != null && jaar.van > jaar.tot) throw new Error('Het beginjaar moet vóór het eindjaar liggen.');
-  const text = query.trim() ? { query_string: { query: query.trim(), fields: queryFields(field), allow_leading_wildcard: jokers === true } } : { match_all: {} };
+  const text = query.trim() ? { query_string: { query: veiligeZoekvraag(query.trim()), fields: queryFields(field), allow_leading_wildcard: jokers === true } } : { match_all: {} };
   // Context (binnen) en jaartal gaan in de query: ze beperken ook de facetten en de totalen.
-  const filter = [binnen && context.clause, jaar && jaarClause(jaar)].filter(Boolean);
+  const filter = [binnen && context.clause, jaar && jaarClause(jaar), locatie === true && locatieClause()].filter(Boolean);
   const search = filter.length ? { bool: { must: [text], filter } } : text;
   return { search, filters: clean, field, page, sort, binnen, verberg: verbergt({ query, filters: clean, binnen }) };
 }
@@ -198,11 +203,12 @@ export function safeUrl(value) {
 export const vertrouwelijk = source => values(source?.[fields.conditionsOfAccess]).some(value => value !== 'openbaar');
 // Deelbare URL: ?q=…&veld=…&soort=…&periode=…&binnen=vondstlocatie:6129412&sorteer=…&pagina=…
 const params = { soort: 'soort', name: 'type', keywords: 'groep', temporalCoverage: 'periode', material: 'materiaal', genre: 'stijl', category: 'waardering', addressRegion: 'provincie', addressLocality: 'plaats', conditionsOfAccess: 'toegang' };
-export function toParams({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null }) {
+export function toParams({ query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null, locatie = false }) {
   const result = new URLSearchParams();
   if (query.trim()) result.set('q', query.trim());
   if (field !== DEFAULT_FIELD) result.set('veld', field);
   if (binnen) result.set('binnen', binnen);
+  if (locatie === true) result.set('kaart', '1');
   if (jaar?.van != null) result.set('van', String(jaar.van));
   if (jaar?.tot != null) result.set('tot', String(jaar.tot));
   if (jaar && jaar.modus === 'binnen') result.set('jaarmodus', 'binnen');
@@ -212,6 +218,8 @@ export function toParams({ query = '', field = DEFAULT_FIELD, filters = {}, page
   if (jokers) result.set('jokers', '1');
   return result;
 }
+export const OBJECT = new RegExp(`^(${Object.keys(soorten).join('|')}):(\\d{1,10})$`);
+export const objectUrl = (soort, nummer, base = '') => `${base}?${new URLSearchParams({ object: `${soort}:${nummer}` })}`;
 export function fromParams(search) {
   const input = new URLSearchParams(search);
   const filters = {};
@@ -233,15 +241,19 @@ export function fromParams(search) {
     jokers: input.get('jokers') === '1',
     binnen: binnen && BINNEN.test(binnen) ? binnen : null,
     jaar: jaarOk ? { van, tot, modus: input.get('jaarmodus') === 'binnen' ? 'binnen' : 'overlapt' } : null,
+    locatie: input.get('kaart') === '1',
     page: Number.isInteger(page) && page >= 1 && page * PAGE_SIZE <= MAX_WINDOW ? page - 1 : 0
   };
-  return { state, active: [...input.keys()].some(key => ['q', 'binnen', 'van', 'tot', ...Object.values(params)].includes(key)) };
+  // Korte link naar één object: ?object=vondstlocatie:6129412 wordt een zoekactie op dat nummer binnen die soort.
+  const object = OBJECT.exec(input.get('object') ?? '');
+  if (object) Object.assign(state, { query: `"${object[2]}"`, field: 'Nummer', filters: { soort: [object[1]] }, binnen: null, jaar: null, locatie: false, page: 0 });
+  return { state, active: Boolean(object) || [...input.keys()].some(key => ['q', 'binnen', 'van', 'tot', 'kaart', ...Object.values(params)].includes(key)) };
 }
 // Uitleg van de zoekactie in gewone taal. binnenLabel is bijv. 'vondstlocatie “Kletterstraat” (6129412)'.
 const fieldText = { Alles: 'in alle tekstvelden', Omschrijving: 'in de omschrijving', Naam: 'in de naam of het type', Plaats: 'in de plaatsnaam', Periode: 'in de periode', Materiaal: 'in het materiaal', Nummer: 'in het nummer (CHOI of Archis)', Exact: 'exact (zonder meervoud, samenstellingen en synoniemen)' };
 const filterValue = (key, value) => `“${key === 'soort' ? soorten[value] ?? value : value}”`;
 export function describe(state = {}, binnenLabel) {
-  const { query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null } = state;
+  const { query = '', field = DEFAULT_FIELD, filters = {}, page = 0, sort = 'relevantie', jokers = false, binnen = null, jaar = null, locatie = false } = state;
   const lines = [];
   const trimmed = query.trim();
   if (!trimmed) lines.push(binnen ? 'Toont alles (geen zoekvraag).' : 'Toont alle objecten (geen zoekvraag).');
@@ -252,6 +264,7 @@ export function describe(state = {}, binnenLabel) {
     if (words.length > 1 && !words.some(word => /^(AND|OR|NOT|&&|\|\|)$/.test(word) || /^[+-]/.test(word))) lines.push('Zonder AND/OR/NOT is het genoeg als één van de woorden voorkomt.');
   }
   if (binnen) lines.push(binnen.startsWith('rond:') ? `Alleen wat binnen ${binnenLabel ?? binnen} ligt.` : `Alleen wat ligt in ${binnenLabel ?? binnen}.`);
+  if (locatie === true) lines.push('Alleen objecten met een locatie op de kaart (onderzoeksgebieden, en vondstlocaties en terreinen met een geleend vlak).');
   if (jaar) lines.push(`Alleen objecten waarvan de datering ${JAARMODI[jaar.modus ?? 'overlapt']} valt in ${jaarBereik(jaar)} (jaartallen uit ABR).`);
   if (verbergt({ query, filters, binnen })) lines.push('Zonder zoekvraag worden vondsten en grondsporen niet getoond; vink ze aan bij Soort of zoek op een woord.');
   const active = Object.entries(filters).filter(([, list]) => list.length);
@@ -282,6 +295,7 @@ export async function search(body, signal, url = endpoint()) {
     const detail = await response.text();
     console.error('Elasticsearch', response.status, detail);
     if (response.status === 404) throw new Error(`De zoekservice “${service}” bestaat (nog) niet.`);
+    if (response.status === 503 || /not ready/i.test(detail)) throw new Error('De zoekservice wordt op dit moment bijgewerkt. Probeer het over een paar minuten opnieuw.');
     if (response.status === 400 && /parsing_exception|parse_exception|query_shard_exception/.test(detail)) throw new Error('Controleer je zoeksyntax: gebruik bijvoorbeeld aardewerk AND Romeins en sluit quotes en haakjes.');
     if (response.status === 400 && /aggregat|fielddata/.test(detail)) throw new Error('De facetquery werkt niet. Probeer het later opnieuw.');
     throw new Error('De zoekservice kan je vraag nu niet verwerken. Probeer het opnieuw.');

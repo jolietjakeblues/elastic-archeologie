@@ -84,7 +84,19 @@ Templates worden alleen bij het aanmaken gelezen; een wijziging betekent de serv
 - **Chronologisch sorteren**: *Periode (oud → jong)* sorteert op `startDate.getal`, dan `endDate.getal`.
 - **ABR-hiërarchie als facet**: *Typegroep (ABR) of kenmerk* (`keywords`: de bovenliggende ABR-begrippen van het type; bij vondstlocaties en onderzoeksgebieden ook verwerving en AMK-indicatie) en *Materiaal (met groepen)* (bijv. ijzer → metaal → anorganisch). Filteren op "metaal" vindt ijzer, brons, koper enz.
 - **ABR-begrip**: bij vondsten, grondsporen en complexen een link naar het ABR-concept van het type (`sameAs`).
+- **Wat staat er op de kaart?** Alleen onderzoeksgebieden hebben een eigen vlak; vondstlocaties en terreinen soms een geleend vlak; complexen, grondsporen en vondsten geen locatie. Elk resultaat zegt dat bij **Locatie**, onder de kaart staat hoeveel resultaten een locatie hebben, en **Alleen met locatie op de kaart** (`?kaart=1`, een `exists` op het geo-veld) toont alleen kaartbare resultaten.
+- **Deelbare links**: de URL bevat altijd de hele zoekactie (*Kopieer link*). Per resultaat geeft **Link** een korte link naar dat ene object: `?object=vondstlocatie:6129412`.
+- **Labels per soort**: `keywords` heet bij vondsten, grondsporen en complexen *Typegroep (ABR)*, bij vondstlocaties *Wijze van verwerving* en bij onderzoeksgebieden *Kenmerk* (AMK-indicatie). Een object zonder naam krijgt als kop soort en plaats ("Onderzoeksgebied in Apeldoorn"); een aantal van 9999 staat er als "onbekend"; een korte omschrijving (vaak een Archis-code) staat direct op het kaartje.
 - Facetten: soort, naam of type, typegroep, periode, materiaal, stijl en cultuur, waardering, provincie, plaats, toegang. Sorteren op relevantie (naam telt 3×), naam, plaats, periode (chronologisch), soort of nummer.
+
+## Beveiliging en publicatie
+
+- [`web/_headers`](web/_headers) zet voor alle bestanden een Content-Security-Policy (alleen eigen bestanden, Leaflet van unpkg met SRI, kaarttegels van PDOK, de Triply-services van de RCE), `frame-ancestors 'none'`, `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy` en `X-Robots-Tag: noindex`. `server.mjs` stuurt lokaal dezelfde headers mee.
+- `noindex` staat ook als meta-tag in de pagina: dit is een demo met testdata.
+- Een schuine streep in de zoekvraag wordt een gewoon teken, zodat niemand een zware reguliere expressie (`/.*a.*/`) naar de service kan sturen; `greppel/sloot` werkt daardoor ook.
+- Brontekst komt altijd als tekst in de pagina (geen HTML uit de bron); links alleen als http(s); CSV-cellen die met `=`, `+`, `-` of `@` beginnen krijgen een `'` (formule-injectie).
+- Wordt de Triply-service bijgewerkt (503, *not ready*), dan zegt de demo dat in plaats van een algemene fout.
+- Een onbekende URL geeft [`web/404.html`](web/404.html) (`not_found_handling` in `wrangler.jsonc`). Favicon: `web/favicon.svg` en `web/favicon-512.png` (ook als Open Graph-afbeelding).
 
 ## Lokaal starten
 
@@ -104,7 +116,7 @@ npm test
 npm run test:live
 ```
 
-`npm test` test queryopbouw, standaardfilter, datering, relaties, URL, uitleg en CSV zonder netwerk. `npm run test:live` test tegen de service: CORS, soortfacet = totaal, geen `#…`-documenten, de standaard zonder vondsten en grondsporen, binnen vondstlocatie 6129412, de inhoudtelling, in de buurt en sorteren op nummer. Andere service: `node tests/live.mjs <naam>`.
+`npm test` test queryopbouw, standaardfilter, datering, locatiefilter, objectlink, het onschadelijk maken van reguliere expressies, relaties, URL, uitleg en CSV zonder netwerk. `npm run test:live` test tegen de service: CORS, soortfacet = totaal, geen `#…`-documenten, de standaard zonder vondsten en grondsporen, binnen vondstlocatie 6129412, de inhoudtelling, in de buurt en sorteren op nummer. Andere service: `node tests/live.mjs <naam>`.
 
 ## Deployment
 
@@ -124,6 +136,8 @@ npx wrangler deploy
 | `web/app.js` | Interface: resultaten met relaties, facetten, context, kaart, export |
 | `web/geo.js` | WKT naar kaartcoördinaten (gelijk aan de erfgoeddemo) |
 | `web/style.css` | RCE-huisstijl, kleuren per soort |
+| `web/_headers` | Beveiligings- en indexeringsheaders (CSP, noindex) |
+| `web/404.html`, `web/favicon.svg`, `web/favicon-512.png` | 404-pagina en pictogram |
 | `tests/search.test.mjs`, `tests/live.mjs` | Tests zonder en met netwerk |
 
 ## Bekende beperkingen

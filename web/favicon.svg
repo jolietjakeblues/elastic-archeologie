@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+ <title>Archeologie zoeken</title>
+ <rect width="64" height="64" rx="12" fill="#ffb612"/>
+ <path d="M8 41h48M8 48h48M8 55h48" stroke="#b98205" stroke-width="3" opacity=".65"/>
+ <path d="M18 26h21l-2 7-7 3-3 7-7-7-2-10Z" fill="#154273"/>
+ <path d="m29 27 14-14" stroke="#154273" stroke-width="6" stroke-linecap="round"/>
+ <circle cx="43" cy="19" r="11" fill="none" stroke="#01689b" stroke-width="5"/>
+ <path d="m51 27 8 8" stroke="#01689b" stroke-width="5" stroke-linecap="round"/>
+</svg>

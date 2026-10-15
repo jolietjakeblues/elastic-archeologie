@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Pagina niet gevonden (404) | Archeologie SDO/Elastic demo</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .notfound { padding: clamp(42px, 7vw, 96px) 0 90px; }
+    .notfound-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 440px); gap: clamp(26px, 5vw, 85px); align-items: center; }
+    .eyebrow { font-size: .85rem; font-weight: 700; color: #696969; letter-spacing: .025em; }
+    .notfound h1 { font-size: clamp(2rem, 4.2vw, 3.6rem); line-height: 1.12; margin: 12px 0 20px; }
+    .notfound p { max-width: 640px; }
+    .notfound .lead { font-size: 1.15rem; line-height: 1.5; }
+    .notfound-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+    .notfound-actions a { display: inline-flex; align-items: center; min-height: 54px; padding: 10px 19px; border: 1px solid #01689b; color: #01689b; text-decoration: none; font-weight: 700; }
+    .notfound-actions a.primary { color: #fff; background: #01689b; }
+    .notfound-actions a:hover { background: #f3f3f3; }
+    .notfound-actions a.primary:hover { background: #154273; }
+    .strata { width: 100%; max-width: 440px; height: auto; display: block; }
+    .notfound-tip { margin-top: 42px; border-left: 4px solid #ffb612; padding: 12px 18px; background: #fff6e2; font-size: .9rem; }
+    @media (max-width: 740px) { .notfound-layout { grid-template-columns: 1fr; } .strata { max-width: 320px; margin: auto; } .notfound { padding-top: 42px; } }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#inhoud">Direct naar inhoud</a>
+  <header class="site-header">
+    <div class="brand"><p><strong>Archeologie SDO/Elastic demo</strong><br>Technische demonstrator op open data van de RCE</p></div>
+    <nav class="bar" aria-label="Kruimelpad"><div class="wrap"><ol class="crumbs"><li><a href="/">Demo</a></li><li aria-current="page">Pagina niet gevonden</li></ol></div></nav>
+  </header>
+  <main id="inhoud" class="wrap notfound">
+    <div class="notfound-layout">
+      <section aria-labelledby="titel">
+        <span class="eyebrow">Foutmelding 404 · Geen resultaat op deze locatie</span>
+        <h1 id="titel">Deze pagina is niet opgegraven.</h1>
+        <p class="lead">We hebben gezocht, maar op dit adres geen pagina aangetroffen.</p>
+        <p>Misschien is de link verouderd of is het adres niet helemaal juist. De archeologische gegevens kun je nog gewoon doorzoeken.</p>
+        <div class="notfound-actions">
+          <a class="primary" href="/">Terug naar archeologie zoeken</a>
+          <a href="https://github.com/jolietjakeblues/elastic-archeologie">Bekijk het project op GitHub</a>
+        </div>
+      </section>
+      <svg class="strata" role="img" aria-labelledby="illustratie-titel illustratie-tekst" viewBox="0 0 440 390" xmlns="http://www.w3.org/2000/svg">
+        <title id="illustratie-titel">Doorsnede van archeologische bodemlagen</title>
+        <desc id="illustratie-tekst">Een zoekloep boven bodemlagen en een gedeeltelijk begraven aardewerken pot. Het getal 404 staat in de grond.</desc>
+        <rect width="440" height="390" rx="8" fill="#f3f3f3"/>
+        <path d="M0 126H440V390H0Z" fill="#ffebc0"/>
+        <path d="M0 167Q110 155 213 171T440 163V390H0Z" fill="#f3d48e"/>
+        <path d="M0 213Q110 232 220 210T440 216V390H0Z" fill="#dcaf62"/>
+        <path d="M0 280Q100 260 220 286T440 272V390H0Z" fill="#b7833a"/>
+        <path d="M0 343Q120 330 215 344T440 340V390H0Z" fill="#86602e"/>
+        <path d="M0 126H440" stroke="#154273" stroke-width="3"/>
+        <path d="M186 203C183 228 188 246 197 255C206 265 211 270 211 295H280C280 273 286 267 296 254C306 240 309 225 305 203" fill="#f8f0dc" stroke="#154273" stroke-width="5" stroke-linejoin="round"/>
+        <path d="M181 203H310" stroke="#154273" stroke-width="7" stroke-linecap="round"/>
+        <path d="M203 234Q245 248 289 232M211 259Q244 273 282 259" fill="none" stroke="#b7833a" stroke-width="4"/>
+        <text x="28" y="258" fill="#154273" font-family="Calibri,Verdana,sans-serif" font-size="49" font-weight="700" opacity=".8">404</text>
+        <circle cx="315" cy="100" r="57" fill="#fff" fill-opacity=".75" stroke="#01689b" stroke-width="11"/>
+        <path d="m354 140 53 53" stroke="#01689b" stroke-width="15" stroke-linecap="round"/>
+        <path d="m298 88 10-14 10 12-8 15-13 0Z" fill="#ffb612"/>
+        <circle cx="325" cy="110" r="5" fill="#ffb612"/>
+        <path d="M45 183l11 4m46 115 15-5m231-49 14 6m-47 79 12-3" stroke="#fff6e2" stroke-width="5" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <p class="notfound-tip"><strong>Zoektip:</strong> probeer op de hoofdpagina bijvoorbeeld <a href="/?q=grafheuvel">grafheuvel</a> of <a href="/?q=aardewerk">aardewerk</a>.</p>
+  </main>
+</body>
+</html>
