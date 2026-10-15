@@ -76,11 +76,13 @@ summary { cursor: pointer; font-weight: 700; }
 /* Resultaten */
 article { padding: 18px 20px; border: 1px solid var(--grijs-3); background: #fff; margin-bottom: 14px; overflow-wrap: anywhere; cursor: pointer; }
 article:hover { border-color: var(--grijs-5); }
-article.selected { border-color: var(--geel); box-shadow: inset 4px 0 0 var(--geel); }
 .number { font-size: .8rem; color: var(--grijs-6); margin: 0; }
 article h3 { color: var(--blauw); }
-.metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 20px; font-size: .85rem; line-height: 1.5; margin: 10px 0; }
-.metadata div { display: flex; gap: 6px; } dt { font-weight: 700; } dd { margin: 0; }
+/* Metadata: twee kolommen als er ruimte is, anders één. Labels (dt) breken nooit midden in een woord af en krimpen
+   niet; alleen de waarde (dd) mag afbreken. Het kaartje zelf heeft overflow-wrap: anywhere voor lange URL's. */
+.metadata { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 17rem), 1fr)); gap: 2px 20px; font-size: .85rem; line-height: 1.5; margin: 10px 0; }
+.metadata div { display: flex; gap: 6px; min-width: 0; }
+dt { font-weight: 700; flex: none; white-space: nowrap; overflow-wrap: normal; } dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
 .match { padding: 8px 12px; border-left: 4px solid var(--geel); background: var(--geel-zacht); margin: 8px 0; font-size: .9rem; line-height: 1.55; }
 mark { background: var(--geel-licht); color: #000; font-weight: 700; padding: 0 1px; }
 article details { margin-top: 10px; font-size: .9rem; } .description { white-space: pre-line; }
@@ -92,10 +94,11 @@ article details { margin-top: 10px; font-size: .9rem; } .description { white-spa
 
 /* Kaart */
 #map-panel { position: sticky; top: 16px; }
-#map { height: calc(100vh - 140px); min-height: 360px; border: 1px solid var(--grijs-3); background: var(--grijs-1); }
+/* Ruimte onder de kaart voor legenda, uitleg en de telling, zodat die in beeld blijven naast de (meescrollende) kaart. */
+#map { height: calc(100vh - 330px); min-height: 360px; border: 1px solid var(--grijs-3); background: var(--grijs-1); }
 #map-info { margin-top: 8px; }
-.label-marker span { position: absolute; transform: translate(-50%, calc(-100% - 6px)); padding: 1px 6px; background: var(--blauw); color: #fff; font: 700 12px/1.4 "RO Sans", Calibri, Verdana, sans-serif; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
-.label-marker span::after { content: ''; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: var(--blauw); }
+.label-marker span { position: absolute; transform: translate(-50%, calc(-100% - 6px)); padding: 1px 6px; background: var(--kleur, var(--blauw)); color: #fff; font: 700 12px/1.4 "RO Sans", Calibri, Verdana, sans-serif; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.35); }
+.label-marker span::after { content: ''; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: var(--kleur, var(--blauw)); }
 .label-marker span.selected { background: var(--geel); color: #000; z-index: 1; } .label-marker span.selected::after { border-top-color: var(--geel); }
 .view-toggle { display: none; margin-top: 8px; }
 .view-toggle button + button { border-left: 0; }
@@ -148,16 +151,14 @@ dialog ul { padding-left: 20px; font-size: .9rem; line-height: 1.5; } dialog li 
 }
 
 /* Archeologie: soorten, relaties en context */
-:root { --archeologischonderzoeksgebied: #39870c; --vondstlocatie: #01689b; --archeologischterrein: #673327; --archeologischcomplex: #a90061; --grondsporen: #e17000; --vondsten: #42145f; }
+:root { --archeologischonderzoeksgebied: #39870c; --vondstlocatie: #01689b; --archeologischterrein: #673327; --archeologischcomplex: #a90061; --grondsporen: #b85500; --vondsten: #42145f; }
 [data-soort=archeologischonderzoeksgebied] { --kleur: var(--archeologischonderzoeksgebied); } [data-soort=vondstlocatie] { --kleur: var(--vondstlocatie); }
 [data-soort=archeologischterrein] { --kleur: var(--archeologischterrein); } [data-soort=archeologischcomplex] { --kleur: var(--archeologischcomplex); }
 [data-soort=grondsporen] { --kleur: var(--grondsporen); } [data-soort=vondsten] { --kleur: var(--vondsten); } [data-soort=binnen] { --kleur: #000; }
-.search-panel .binnen-input { grid-column: 1/-1; }
-.binnen-input .hint { margin: 4px 0 0; }
 .optional { font-weight: 400; color: var(--grijs-6); }
 .badge { display: inline-block; padding: 0 8px; background: var(--kleur, var(--blauw)); color: #fff; font-weight: 700; font-size: .8rem; }
 article { border-left: 4px solid var(--kleur, var(--grijs-3)); }
-article.selected { box-shadow: inset 4px 0 0 var(--geel); }
+article.selected { border-color: var(--geel); box-shadow: inset 4px 0 0 var(--geel); }
 .facet-name[data-soort]::before, .legend li::before { content: ''; display: inline-block; width: 11px; height: 11px; margin-right: 6px; background: var(--kleur); vertical-align: -1px; }
 .legend { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 0; margin: 8px 0 0; font-size: .8rem; }
 .legend li[data-soort=binnen]::before { background: none; border: 2px dashed #000; width: 9px; height: 9px; }
@@ -171,12 +172,6 @@ article.selected { box-shadow: inset 4px 0 0 var(--geel); }
 .context p { margin: 0 0 6px; } .context .links { margin: 0; } .context .links button { padding: 2px 10px; font-size: .85rem; }
 #active-filters .chip-binnen { background: #000; border-color: #000; color: #fff; }
 #active-filters .chip-binnen:hover:not(:disabled) { background: var(--grijs-6); color: #fff; }
-#gebied-facet summary { cursor: pointer; }
-.gebied-option { width: 100%; border: 0; background: none; color: #000; text-align: left; }
-.gebied-option:hover:not(:disabled) { background: var(--grijs-1); color: #000; }
-.label-marker span { background: var(--kleur, var(--blauw)); }
-.label-marker span::after { border-top-color: var(--kleur, var(--blauw)); }
-.label-marker span.selected { background: var(--geel); } .label-marker span.selected::after { border-top-color: var(--geel); }
 @media (max-width: 760px) { .relation { flex-direction: column; gap: 2px; } }
 .context select { width: auto; min-height: 34px; padding: 2px 8px; font-size: .85rem; }
 
@@ -190,3 +185,16 @@ article.selected { box-shadow: inset 4px 0 0 var(--geel); }
 .jaar-row input { width: 9rem; } .jaar-row select { width: auto; flex: 1 1 16rem; }
 .jaar-input .hint { margin: 4px 0 0; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* Alleen met locatie, uitleg bij de kaart, korte omschrijving, linkknop */
+.locatie-toggle { display: inline-flex; align-items: center; gap: 6px; font-weight: 400; margin: 0; cursor: pointer; }
+.locatie-toggle input { width: 18px; height: 18px; min-height: 0; margin: 0; padding: 0; accent-color: var(--blauw); }
+.metadata .breed { grid-column: 1/-1; }
+.kaart-uitleg { margin: 6px 0 0; }
+#map-info .link-button { font-size: inherit; }
+.links .link-kopie { min-width: 6.5em; }
+/* Datering op smalle schermen: twee velden naast elkaar, keuze eronder */
+@media (max-width: 760px) {
+  .jaar-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto minmax(0, 1fr); }
+  .jaar-row input { width: 100%; }
+  .jaar-row select { grid-column: 1/-1; width: 100%; }
+}

@@ -1,14 +1,14 @@
-import { jaarBereik, jaarTekst, JAAR_MIN, JAAR_MAX, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, erfgoedQuery, erfgoedDemoUrl, ERFGOED_ENDPOINT, lookupQuery, insideClause, nearClause, AFSTANDEN, MET_INHOUD, MET_LOCATIE, PARENT_FIELDS, VERBORGEN, verbergt, vertrouwelijk, bucketsOf, search, setService, DEFAULT_SERVICE, facets, fields, sorts, soorten, extern, soortVan, values, textValue, safeUrl, toParams, fromParams, describe, toCsv, DEFAULT_FIELD, PAGE_SIZE, MAX_WINDOW, EXPORT_MAX } from './search.js';
+import { objectUrl, jaarBereik, jaarTekst, JAAR_MIN, JAAR_MAX, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, erfgoedQuery, erfgoedDemoUrl, ERFGOED_ENDPOINT, lookupQuery, insideClause, nearClause, AFSTANDEN, MET_INHOUD, MET_LOCATIE, PARENT_FIELDS, VERBORGEN, verbergt, vertrouwelijk, bucketsOf, search, setService, DEFAULT_SERVICE, facets, fields, sorts, soorten, extern, soortVan, values, textValue, safeUrl, toParams, fromParams, describe, toCsv, DEFAULT_FIELD, PAGE_SIZE, MAX_WINDOW, EXPORT_MAX } from './search.js';
 import { geometryFor } from './geo.js';
 const $ = id => document.getElementById(id);
 // Testschakelaar: ?service=<naam> zoekt in een andere service van rce/archeologie-sdo.
 const service = setService(new URLSearchParams(location.search).get('service'));
-const blank = () => ({ query: '', field: DEFAULT_FIELD, filters: {}, page: 0, sort: 'relevantie', binnen: null, jaar: null, jokers: state?.jokers ?? false });
+const blank = () => ({ query: '', field: DEFAULT_FIELD, filters: {}, page: 0, sort: 'relevantie', binnen: null, jaar: null, locatie: false, jokers: state?.jokers ?? false });
 let state; state = blank();
 let controller, needsFit = false, lastTotal = 0;
 const cards = new Map(), markers = new Map(), shapes = new Map(), relationSlots = new Map();
 const wide = window.matchMedia('(min-width: 1100px)');
-const colors = { archeologischonderzoeksgebied: '#39870c', vondstlocatie: '#01689b', archeologischterrein: '#673327', archeologischcomplex: '#a90061', grondsporen: '#e17000', vondsten: '#42145f' };
+const colors = { archeologischonderzoeksgebied: '#39870c', vondstlocatie: '#01689b', archeologischterrein: '#673327', archeologischcomplex: '#a90061', grondsporen: '#b85500', vondsten: '#42145f' };
 // Leaflet komt van een CDN; zonder Leaflet werkt de demo verder zonder kaart.
 const map = window.L ? L.map('map', { zoomControl: true }).setView([52.2, 5.3], 7) : null;
 const contextLayer = map ? L.featureGroup().addTo(map) : null;
@@ -18,12 +18,21 @@ else $('map').append(el('p', 'De kaartbibliotheek kon niet worden geladen.', 'em
 const format = number => new Intl.NumberFormat('nl-NL').format(number);
 // Sommige bronwaarden zijn dubbel gecodeerd. Entiteiten worden als tekst gedecodeerd; er komt nooit HTML uit de bron in de pagina.
 const decode = text => (/&[#\w]+;/.test(text) ? new DOMParser().parseFromString(text, 'text/html').body.textContent : text);
-const show = value => decode(textValue(value));
+// Waarden die alleen in spaties of hoofdletters verschillen (komt in de bron voor, bijv. "proefputten /proefsleuven"
+// naast "proefputten/proefsleuven") worden één keer getoond.
+const uniek = list => { const gezien = new Set(); return list.filter(item => { const sleutel = item.replace(/\s*\/\s*/g, '/').replace(/\s+/g, ' ').trim().toLowerCase(); return !gezien.has(sleutel) && gezien.add(sleutel); }); };
+const show = value => decode(uniek(values(value)).join(', '));
 const soortLabel = soort => soorten[soort] ?? extern[soort] ?? 'Object';
 const meervoud = { archeologischonderzoeksgebied: ['onderzoeksgebied', 'onderzoeksgebieden'], vondstlocatie: ['vondstlocatie', 'vondstlocaties'], archeologischterrein: ['archeologisch terrein', 'archeologische terreinen'], archeologischcomplex: ['archeologisch complex', 'archeologische complexen'], grondsporen: ['grondspoor', 'grondsporen'], vondsten: ['vondst', 'vondsten'] };
 const aantalSoort = (soort, count) => `${format(count)} ${(meervoud[soort] ?? [soort, soort])[count === 1 ? 0 : 1]}`;
 function el(tag, text, className) { const node = document.createElement(tag); if (text != null) node.textContent = text; if (className) node.className = className; return node; }
 function button(text, callback, className) { const node = el('button', text, className); node.type = 'button'; node.addEventListener('click', callback); return node; }
+async function kopieer(tekst, knop) {
+  const oud = knop.textContent;
+  try { await navigator.clipboard.writeText(tekst); knop.textContent = 'Gekopieerd'; }
+  catch { window.prompt('Kopieer deze link:', tekst); }
+  setTimeout(() => { knop.textContent = oud; }, 2000);
+}
 function link(text, url) { const node = el('a', text); node.href = url; node.target = '_blank'; node.rel = 'noopener noreferrer'; return node; }
 
 // Context "binnen": wat in een onderzoeksgebied, vondstlocatie of terrein ligt, of alles in de buurt van een object.
@@ -55,9 +64,9 @@ function setBinnen(binnen, extra = {}) {
   window.scrollTo({ top: $('status').offsetTop - 16, behavior: 'smooth' });
 }
 // Eén object tonen via zijn nummer en soort (bijv. vanuit een relatie).
-const showObject = (soort, nummer) => setBinnen(null, { query: `"${nummer}"`, field: 'Nummer', filters: { soort: [soort] }, sort: 'relevantie', jaar: null });
+const showObject = (soort, nummer) => setBinnen(null, { query: `"${nummer}"`, field: 'Nummer', filters: { soort: [soort] }, sort: 'relevantie', jaar: null, locatie: false });
 // Vanuit een resultaat naar wat erin ligt: met een schone zoekactie.
-const openBinnen = binnen => setBinnen(binnen, { query: '', field: DEFAULT_FIELD, filters: {}, jaar: null });
+const openBinnen = binnen => setBinnen(binnen, { query: '', field: DEFAULT_FIELD, filters: {}, jaar: null, locatie: false });
 
 function highlight(fragment) {
   const node = el('p', null, 'match');
@@ -74,7 +83,20 @@ function relationRow(label, items) {
   const row = el('div', null, 'relation'); row.append(el('span', label, 'relation-label'));
   const list = el('span', null, 'relation-items'); list.append(...items); row.append(list); return row;
 }
-const metadataFields = { alternateName: 'Archis', temporalCoverage: 'Periode', material: 'Materiaal', keywords: 'Typegroep of kenmerk', genre: 'Stijl en cultuur', materialExtent: 'Aantal', itemCondition: 'Toestand', category: 'Waardering', addressLocality: 'Plaats', addressRegion: 'Provincie', conditionsOfAccess: 'Toegang' };
+const metadataFields = { alternateName: 'Archis', temporalCoverage: 'Periode', material: 'Materiaal', keywords: 'Typegroep (ABR)', genre: 'Stijl en cultuur', materialExtent: 'Aantal', itemCondition: 'Toestand', category: 'Waardering', addressLocality: 'Plaats', addressRegion: 'Provincie', conditionsOfAccess: 'Toegang' };
+// schema:keywords betekent per soort iets anders: bij vondstlocaties de wijze van verwerving, bij onderzoeksgebieden de AMK-indicatie.
+const keywordsLabel = { vondstlocatie: 'Wijze van verwerving', archeologischonderzoeksgebied: 'Kenmerk' };
+// Een korte omschrijving (vaak een Archis-code als 'ROM WSCH') staat direct op het kaartje, een lange in een uitklapblok.
+const KORT = 120;
+// Een naam "-" of zonder naam: kop op soort en plaats, bijv. "Onderzoeksgebied in Apeldoorn".
+const kopVan = (source, soort) => {
+  const naam = show(source[fields.name]);
+  if (naam && naam !== '-') return naam;
+  const plaats = values(source[fields.addressLocality])[0];
+  return plaats ? `${soortLabel(soort)} in ${decode(plaats)}` : `${soortLabel(soort)} zonder naam`;
+};
+const locatieTekst = { vondstlocatie: 'vlak van het onderzoeksgebied (geen eigen locatie)', archeologischterrein: 'vlak van het rijksmonument (geen eigen locatie)' };
+const geenLocatieTekst = { vondstlocatie: 'geen: deze vondstlocatie ligt niet in een onderzoeksgebied met een vlak', archeologischterrein: 'geen: dit terrein ligt niet in een rijksmonument', archeologischcomplex: 'geen eigen locatie (zie waar het in ligt)', grondsporen: 'geen eigen locatie (zie waar het in ligt)', vondsten: 'geen eigen locatie (zie waar het in ligt)' };
 function renderResults(hits) {
   $('results').replaceChildren(); cards.clear(); relationSlots.clear();
   if (!hits.length) { $('results').append(el('p', 'Niets gevonden. Pas je zoekvraag aan of verwijder een filter.', 'empty')); return; }
@@ -84,18 +106,24 @@ function renderResults(hits) {
     card.addEventListener('click', event => { if (!event.target.closest('a, button, summary, details')) select(hit._id, true); });
     const head = el('p', null, 'number'); head.append(el('span', soortLabel(soort), 'badge'), document.createTextNode(` ${nummer ?? 'zonder nummer'}`));
     if (vertrouwelijk(source)) head.append(el('span', show(source[fields.conditionsOfAccess]), 'badge vertrouwelijk'));
-    card.append(head, el('h3', show(source[fields.name]) || `${soortLabel(soort)} zonder naam`));
+    card.append(head, el('h3', kopVan(source, soort)));
     const metadata = el('dl', null, 'metadata');
-    for (const [key, label] of Object.entries(metadataFields)) {
+    for (const [key, standaardLabel] of Object.entries(metadataFields)) {
+      const label = key === 'keywords' ? keywordsLabel[soort] ?? standaardLabel : standaardLabel;
       let text = show(source[fields[key]]); if (!text || (key === 'conditionsOfAccess' && text === 'openbaar')) continue;
+      // 9999 is in de bron "onbekend".
+      if (key === 'materialExtent' && text === '9999') text = 'onbekend';
       // Periode met de jaartallen uit ABR erbij, bijv. Romeinse Tijd (12 v. Chr. – 449 n. Chr.).
       if (key === 'temporalCoverage') { const begin = Number(values(source[fields.startDate])[0]), eind = Number(values(source[fields.endDate])[0]); if (Number.isFinite(begin) && Number.isFinite(eind) && values(source[fields.startDate]).length) text += ` (${jaarTekst(begin)} – ${jaarTekst(eind)})`; }
       const row = el('div'); row.append(el('dt', `${label}:`), el('dd', text)); metadata.append(row);
     }
-    // Een vondstlocatie of terrein heeft geen eigen geometrie; de demo leent die van het onderzoeksgebied of rijksmonument.
-    if (geometryFor(source) && (soort === 'vondstlocatie' || soort === 'archeologischterrein')) {
-      const row = el('div'); row.append(el('dt', 'Locatie:'), el('dd', soort === 'vondstlocatie' ? 'vlak van het onderzoeksgebied (geen eigen locatie)' : 'vlak van het rijksmonument (geen eigen locatie)')); metadata.append(row);
-    }
+    // Waar staat het op de kaart? Een vondstlocatie of terrein leent het vlak van het onderzoeksgebied of rijksmonument;
+    // complexen, grondsporen en vondsten hebben geen locatie.
+    const locatie = geometryFor(source) ? locatieTekst[soort] : geenLocatieTekst[soort];
+    if (locatie) { const row = el('div'); row.append(el('dt', 'Locatie:'), el('dd', locatie)); metadata.append(row); }
+    const descriptions = values(source[fields.description]).map(decode);
+    const kort = descriptions.length === 1 && descriptions[0].length <= KORT && !descriptions[0].includes('\n');
+    if (kort) { const row = el('div', null, 'breed'); row.append(el('dt', 'Omschrijving:'), el('dd', descriptions[0])); metadata.append(row); }
     if (metadata.childElementCount) card.append(metadata);
     // Relaties: waar het in ligt en wat erin ligt; gevuld door loadRelations.
     const relations = el('div', null, 'relations');
@@ -103,13 +131,14 @@ function renderResults(hits) {
     card.append(relations);
     const fragments = Object.values(hit.highlight || {}).flat().slice(0, 3);
     fragments.forEach(fragment => card.append(highlight(fragment)));
-    const descriptions = values(source[fields.description]).map(decode);
-    if (descriptions.length) { const detail = el('details'); detail.append(el('summary', 'Volledige omschrijving')); descriptions.forEach(text => detail.append(el('p', text, 'description'))); card.append(detail); }
+    if (descriptions.length && !kort) { const detail = el('details'); detail.append(el('summary', 'Volledige omschrijving')); descriptions.forEach(text => detail.append(el('p', text, 'description'))); card.append(detail); }
     const links = el('div', null, 'links');
     for (const raw of values(source['@id'])) { const url = safeUrl(raw); if (url) { links.append(link('Linked Data', url)); const uri = el('p', null, 'uri'); uri.append(link(raw, url)); card.append(uri); } }
     // Het ABR-begrip van het type (vondsten, grondsporen, complexen).
     for (const raw of values(source[fields.sameAs])) { const url = safeUrl(raw); if (url && url.startsWith('https://data.cultureelerfgoed.nl/term/id/abr/')) links.append(link('ABR-begrip', url)); }
     if (map && geometryFor(source)) links.append(button('Toon op kaart', () => select(hit._id, true)));
+    // Korte, deelbare link naar dit ene object.
+    if (nummer) links.append(button('Link', event => kopieer(new URL(objectUrl(soort, nummer), location.href).href, event.currentTarget), 'link-kopie'));
     if (geometryFor(source) && nummer && MET_LOCATIE.includes(soort)) links.append(button('In de buurt', () => openBinnen(`rond:${soort}:${nummer}:500`)));
     card.append(links); $('results').append(card);
   }
@@ -203,7 +232,13 @@ function renderMap(hits) {
   for (const shape of shapes.values()) if (isArea(shape.soort)) shape.bringToBack();
   const total = counts.punt + counts.vlak;
   needsFit = total > 0 || contextLayer.getLayers().length > 0; fitMarkers();
-  $('map-info').textContent = hits.length ? `Op kaart: ${total} van ${hits.length} getoonde resultaten. Complexen, grondsporen en vondsten hebben geen locatie; veel vondstlocaties en terreinen ook niet.` : 'Geen resultaten om op de kaart te tonen.';
+  $('map-info').replaceChildren();
+  if (!hits.length) $('map-info').textContent = 'Geen resultaten om op de kaart te tonen.';
+  else {
+    $('map-info').append(document.createTextNode(`Op de kaart: ${total} van de ${hits.length} getoonde resultaten. `));
+    if (total < hits.length) $('map-info').append(document.createTextNode(total ? 'De andere hebben geen locatie. ' : 'Deze resultaten hebben geen locatie. '));
+    if (total < hits.length && !state.locatie) $('map-info').append(button('Toon alleen resultaten met een locatie', () => { state.locatie = true; state.page = 0; syncForm(); run(); }, 'link-button'));
+  }
   return total;
 }
 // Een verborgen kaart heeft geen afmetingen; pas passend inzoomen zodra de kaart zichtbaar is.
@@ -250,6 +285,10 @@ function renderFilters(aggregations, context) {
     const chip = button(`Binnen: ${context?.label ?? state.binnen} ×`, () => setBinnen(null)); chip.className = 'chip-binnen';
     chip.setAttribute('aria-label', `Verwijder ${context?.label ?? state.binnen}`); $('active-filters').append(chip);
   }
+  if (state.locatie) {
+    const chip = button('Alleen met locatie op de kaart ×', () => { state.locatie = false; state.page = 0; syncForm(); run(); });
+    chip.setAttribute('aria-label', 'Verwijder het filter op locatie'); $('active-filters').append(chip);
+  }
   if (state.jaar) {
     const chip = button(`Datering: ${state.jaar.modus === 'binnen' ? 'helemaal' : '(deels)'} in ${jaarBereik(state.jaar).replace(/^de periode /, '')} ×`, () => { state.jaar = null; state.page = 0; syncForm(); run(); });
     chip.setAttribute('aria-label', 'Verwijder het filter op datering'); $('active-filters').append(chip);
@@ -258,7 +297,7 @@ function renderFilters(aggregations, context) {
     const chip = button(`${facets[key]}: ${valueLabel(key, value)} ×`, () => toggleFilter(key, value));
     chip.setAttribute('aria-label', `Verwijder filter ${facets[key]}: ${valueLabel(key, value)}`); $('active-filters').append(chip);
   }
-  if (Object.keys(state.filters).length || state.binnen || state.jaar) $('active-filters').append(button('Wis alle filters', () => { state.filters = {}; state.binnen = null; state.jaar = null; state.page = 0; syncForm(); run(); }));
+  if (Object.keys(state.filters).length || state.binnen || state.jaar || state.locatie) $('active-filters').append(button('Wis alle filters', () => { state.filters = {}; state.binnen = null; state.jaar = null; state.locatie = false; state.page = 0; syncForm(); run(); }));
   // Standaard zonder vondsten en grondsporen: maak dat zichtbaar en omkeerbaar.
   // Bij bladeren zonder zoekvraag: zeg hoeveel vondsten en grondsporen er niet getoond worden.
   if (verbergt(state)) {
@@ -296,6 +335,7 @@ function renderFilters(aggregations, context) {
 // Zoekformulier, URL en uitleg volgen de state.
 function syncForm() {
   $('query').value = state.query; $('field').value = state.field; $('sort').value = state.sort; checkQuery();
+  $('locatie').checked = state.locatie === true;
   $('van').value = state.jaar?.van ?? ''; $('tot').value = state.jaar?.tot ?? ''; $('jaarmodus').value = state.jaar?.modus ?? 'overlapt';
 }
 // Datering uit het formulier; null als beide velden leeg zijn. Gooit een fout bij een ongeldig jaartal.
@@ -392,6 +432,7 @@ $('search-form').addEventListener('submit', event => {
   state.query = $('query').value; state.field = $('field').value; state.page = 0;
   syncForm(); run();
 });
+$('locatie').addEventListener('change', () => { state.locatie = $('locatie').checked; state.page = 0; if ($('query-json').textContent.startsWith('{')) run(); });
 $('sort').addEventListener('change', () => { state.sort = $('sort').value; state.page = 0; if ($('query-json').textContent.startsWith('{')) run(); });
 document.querySelectorAll('[data-example]').forEach(node => node.addEventListener('click', () => {
   $('help').close();
@@ -400,7 +441,7 @@ document.querySelectorAll('[data-example]').forEach(node => node.addEventListene
   if (node.dataset.periode) filters.temporalCoverage = [node.dataset.periode];
   if (node.dataset.groep) filters.material = [node.dataset.groep];
   const jaar = node.dataset.van || node.dataset.tot ? { van: node.dataset.van ? Number(node.dataset.van) : null, tot: node.dataset.tot ? Number(node.dataset.tot) : null, modus: node.dataset.jaarmodus === 'binnen' ? 'binnen' : 'overlapt' } : null;
-  Object.assign(state, { query: node.dataset.example, field: DEFAULT_FIELD, page: 0, binnen: node.dataset.binnen ?? null, filters, jaar });
+  Object.assign(state, { query: node.dataset.example, field: DEFAULT_FIELD, page: 0, binnen: node.dataset.binnen ?? null, filters, jaar, locatie: false });
   syncForm(); run();
 }));
 $('help-open').addEventListener('click', () => $('help').showModal());
@@ -420,11 +461,7 @@ $('next').addEventListener('click', () => { state.page++; run(); });
 document.querySelectorAll('.view-toggle button').forEach(node => node.addEventListener('click', () => setView(node.dataset.view)));
 wide.addEventListener('change', () => { if (map) { map.invalidateSize(); fitMarkers(); } });
 // Deelbare link: de URL bevat altijd de huidige zoekactie.
-$('share').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(location.href); $('share').textContent = 'Link gekopieerd'; }
-  catch { window.prompt('Kopieer deze link:', location.href); }
-  setTimeout(() => { $('share').textContent = 'Kopieer link'; }, 2500);
-});
+$('share').addEventListener('click', event => kopieer(location.href, event.currentTarget));
 // CSV-export: dezelfde zoekactie, maximaal EXPORT_MAX rijen.
 $('export').addEventListener('click', async () => {
   $('export').disabled = true; $('export-info').textContent = 'Export wordt gemaakt…';
