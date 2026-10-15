@@ -42,6 +42,8 @@ test('Binnen een object: via de drie relatievelden; in de buurt via geo_distance
   assert.ok(BINNEN.test('vondstlocatie:6129412'));
   assert.ok(BINNEN.test('archeologischonderzoeksgebied:2041587'));
   assert.ok(BINNEN.test('rond:archeologischterrein:6049046:1000'));
+  assert.ok(BINNEN.test('rijksmonument:45708'), 'terreinen in een rijksmonument (uit de erfgoeddemo)');
+  assert.ok(!BINNEN.test('rond:rijksmonument:45708:500'), 'een rijksmonument heeft hier geen locatie');
   assert.ok(!BINNEN.test('vondsten:1'), 'in een vondst ligt niets');
   assert.ok(!BINNEN.test('rond:vondsten:1:500'), 'een vondst heeft geen locatie');
   assert.ok(!BINNEN.test('rond:vondstlocatie:1:300'));
