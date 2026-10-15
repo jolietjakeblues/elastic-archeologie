@@ -1,4 +1,4 @@
-import { objectUrl, jaarBereik, jaarTekst, JAAR_MIN, JAAR_MAX, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, erfgoedQuery, erfgoedDemoUrl, ERFGOED_ENDPOINT, lookupQuery, insideClause, nearClause, AFSTANDEN, MET_INHOUD, MET_LOCATIE, PARENT_FIELDS, VERBORGEN, verbergt, vertrouwelijk, bucketsOf, search, setService, DEFAULT_SERVICE, facets, fields, sorts, soorten, extern, soortVan, values, textValue, safeUrl, toParams, fromParams, describe, toCsv, DEFAULT_FIELD, PAGE_SIZE, MAX_WINDOW, EXPORT_MAX } from './search.js';
+import { BASE, objectUrl, jaarBereik, jaarTekst, JAAR_MIN, JAAR_MAX, buildQuery, buildExportQuery, buildRelationQuery, inhoudVan, erfgoedQuery, erfgoedDemoUrl, ERFGOED_ENDPOINT, lookupQuery, insideClause, nearClause, AFSTANDEN, MET_INHOUD, MET_LOCATIE, PARENT_FIELDS, VERBORGEN, verbergt, vertrouwelijk, bucketsOf, search, setService, DEFAULT_SERVICE, facets, fields, sorts, soorten, extern, soortVan, values, textValue, safeUrl, toParams, fromParams, describe, toCsv, DEFAULT_FIELD, PAGE_SIZE, MAX_WINDOW, EXPORT_MAX } from './search.js';
 import { geometryFor } from './geo.js';
 const $ = id => document.getElementById(id);
 // Testschakelaar: ?service=<naam> zoekt in een andere service van rce/archeologie-sdo.
@@ -42,6 +42,16 @@ async function resolveContext(binnen) {
   if (contexts.has(binnen)) return contexts.get(binnen);
   const bits = binnen.split(':');
   const [soort, nummer] = bits[0] === 'rond' ? bits.slice(1, 3) : bits;
+  // Een rijksmonument staat in erfgoed-sdo, niet in deze index: de terreinen erin vinden via containedInPlace; nummer en
+  // naam (voor de kop en de link naar de erfgoeddemo) uit de erfgoed-service.
+  if (soort === 'rijksmonument') {
+    const uri = `${BASE}rijksmonument/${nummer}`;
+    const monument = (await search(erfgoedQuery([uri]), AbortSignal.timeout(20000), ERFGOED_ENDPOINT).catch(() => null))?.hits.hits[0]?._source;
+    const rmnr = monument && values(monument[fields.identifier])[0], naam = monument && show(monument[fields.name]);
+    const context = { soort, nummer, uri, rmnr, clause: insideClause(uri), label: `rijksmonument ${rmnr ?? nummer}${naam && naam !== '-' ? ` “${naam}”` : ''}`, summary: 'de archeologische terreinen in dit rijksmonument (containedInPlace); het monument zelf staat in de Erfgoed SDO/Elastic demo', geometry: null };
+    contexts.set(binnen, context);
+    return context;
+  }
   const hit = (await search(lookupQuery(soort, nummer), AbortSignal.timeout(20000))).hits.hits[0];
   if (!hit) throw new Error(`${soortLabel(soort)} ${nummer} bestaat niet in deze index.`);
   const source = hit._source, uri = source['@id'], naam = show(source[fields.name]), geometry = geometryFor(source);
@@ -372,7 +382,10 @@ function renderContext(context) {
     actions.append(distance);
   }
   const url = safeUrl(context.uri); if (url) actions.append(link('Linked Data', url));
-  actions.append(button(`Toon ${soortLabel(context.soort).toLowerCase()} ${context.nummer} zelf`, () => showObject(context.soort, context.nummer)), button('Weer overal zoeken', () => setBinnen(null)));
+  // Het rijksmonument zelf staat in de erfgoeddemo; de andere objecten in deze demo.
+  if (context.soort === 'rijksmonument') { if (context.rmnr) actions.append(link(`Rijksmonument ${context.rmnr} in de erfgoeddemo`, erfgoedDemoUrl(context.rmnr))); }
+  else actions.append(button(`Toon ${soortLabel(context.soort).toLowerCase()} ${context.nummer} zelf`, () => showObject(context.soort, context.nummer)));
+  actions.append(button('Weer overal zoeken', () => setBinnen(null)));
   $('context').append(text, actions);
 }
 async function run(urlMode = 'push') {

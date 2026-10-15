@@ -67,7 +67,8 @@ export const sorts = {
 export const AFSTANDEN = [100, 250, 500, 1000, 2000];
 export const MET_INHOUD = ['archeologischonderzoeksgebied', 'vondstlocatie', 'archeologischterrein'];
 export const MET_LOCATIE = ['archeologischonderzoeksgebied', 'vondstlocatie', 'archeologischterrein'];
-export const BINNEN = new RegExp(`^((${MET_INHOUD.join('|')}):\\d{1,10}|rond:(${MET_LOCATIE.join('|')}):\\d{1,10}:(${AFSTANDEN.join('|')}))$`);
+// rijksmonument:<CHOI>: de archeologische terreinen in dat rijksmonument (het monument zelf staat in erfgoed-sdo).
+export const BINNEN = new RegExp(`^((${MET_INHOUD.join('|')}|rijksmonument):\\d{1,10}|rond:(${MET_LOCATIE.join('|')}):\\d{1,10}:(${AFSTANDEN.join('|')}))$`);
 const notItself = uri => [{ term: { '@id.keyword': uri } }];
 export const insideClause = uri => ({ bool: { should: INSIDE_FIELDS.map(field => ({ term: { [`${field}.keyword`]: uri } })), minimum_should_match: 1 } });
 export const nearClause = ({ lat, lon }, meters, uri) => ({ bool: { filter: [{ geo_distance: { distance: `${meters}m`, [WKT_FIELD]: { lat, lon } } }], must_not: notItself(uri) } });
