@@ -31,7 +31,7 @@ export const PARENT_FIELDS = [fields.containedInPlace, fields.locationCreated, f
 export const INSIDE_FIELDS = [...PARENT_FIELDS, fields.isPartOf];
 // Rijksmonumenten (waarin een terrein ligt) staan in erfgoed-sdo; nummer en naam komen uit die service, de link
 // gaat naar de erfgoeddemo.
-export const ERFGOED_ENDPOINT = 'https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/erfgoed-sdo/services/Erfgoed-sdo-nl4/_search';
+export const ERFGOED_ENDPOINT = 'https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/erfgoed-sdo/services/Erfgoed-sdo-nl5/_search';
 export const ERFGOED_DEMO = 'https://erfgoed-sdo-elastic-demo.jolietjakeblues64.workers.dev/';
 export const searchFields = {
   Alles: ['name', 'alternateName', 'description', 'addressLocality', 'addressRegion', 'category', 'temporalCoverage', 'material', 'genre', 'keywords', 'identifier'].map(key => fields[key]),
