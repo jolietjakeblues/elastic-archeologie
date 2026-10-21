@@ -1,7 +1,7 @@
 import { WKT_FIELD } from './geo.js';
 // De service kan voor een test worden overschreven met ?service=<naam> (alleen services van rce/archeologie-sdo).
 export const DATASET = 'https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/archeologie-sdo/services/';
-export const DEFAULT_SERVICE = 'Archeologie-sdo-abr';
+export const DEFAULT_SERVICE = 'Archeologie-sdo-nl5';
 export const SERVICE = /^[\w-]{1,64}$/;
 let service = DEFAULT_SERVICE;
 export const setService = name => { service = SERVICE.test(name ?? '') ? name : DEFAULT_SERVICE; return service; };
