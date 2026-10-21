@@ -62,18 +62,18 @@ Haal ABR uit het CHO-endpoint, niet met `SERVICE` uit de thesaurusdataset: die l
 ## Service
 
 ```text
-POST https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/archeologie-sdo/services/Archeologie-sdo-abr/_search
+POST https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/archeologie-sdo/services/Archeologie-sdo-nl5/_search
 ```
 
-De service wordt gemaakt met de index template [`triply/elastic-service-archeologie.json`](triply/elastic-service-archeologie.json): dezelfde als `Erfgoed-sdo-nl3` (Nederlandse taalverwerking, `@id.soort` uit de URI, `geo:asWKT` als `geo_shape`, `identifier.getal` als `long`), plus `materialExtent.getal`, `startDate.getal` en `endDate.getal` (jaartallen als `long`, voor het bereikfilter en chronologisch sorteren). Aanmaken met een token met *Management access*, in PowerShell:
+De demo gebruikt sinds 21 oktober 2026 de service **`Archeologie-sdo-nl5`**, gemaakt met [`triply/elastic-service-archeologie-nl5.json`](triply/elastic-service-archeologie-nl5.json): de gedeelde taalanalyse (zie *Versie 5*). De vorige service, `Archeologie-sdo-abr`, is gemaakt met de index template [`triply/elastic-service-archeologie.json`](triply/elastic-service-archeologie.json): dezelfde als `Erfgoed-sdo-nl3` (Nederlandse taalverwerking, `@id.soort` uit de URI, `geo:asWKT` als `geo_shape`, `identifier.getal` als `long`), plus `materialExtent.getal`, `startDate.getal` en `endDate.getal` (jaartallen als `long`, voor het bereikfilter en chronologisch sorteren). Aanmaken met een token met *Management access*, in PowerShell:
 
 ```bash
-curl.exe -H "Authorization: Bearer $env:TRIPLY_TOKEN" -H "Content-Type: application/json" -X POST "https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/archeologie-sdo/services" -d "@triply/elastic-service-archeologie.json"
+curl.exe -H "Authorization: Bearer $env:TRIPLY_TOKEN" -H "Content-Type: application/json" -X POST "https://api.linkeddata.cultureelerfgoed.nl/datasets/rce/archeologie-sdo/services" -d "@triply/elastic-service-archeologie-nl5.json"
 ```
 
 Templates worden alleen bij het aanmaken gelezen; een wijziging betekent de service opnieuw aanmaken. Een andere service proberen kan met `?service=<naam>` in de URL van de demo (alleen services van `rce/archeologie-sdo`).
 
-### Versie 5: de gedeelde taalanalyse (voorbereid)
+### Versie 5: de gedeelde taalanalyse
 
 De taalanalyse van `Archeologie-sdo-abr` is die van `Erfgoed-sdo-nl3`. Daarin splitst *terp* ook waterput, vensterpartij en priesterpolder, en *kapel* ook Kapelle en kapelaan. [`triply/elastic-service-archeologie-nl5.json`](triply/elastic-service-archeologie-nl5.json) is dezelfde template met de gedeelde analyse uit [`triply/nl-analyse.json`](triply/nl-analyse.json). Dat is een kopie van `elastic-ceo/triply/nl-analyse.json`, de bron voor alle demo's: pas de analyse daar aan en kopieer hem hierheen. Daarna maakt `node triply/maak-nl5.mjs` de template opnieuw; het script waarschuwt als de kopie afwijkt van de bron. Wat de analyse doet: zie de README van elastic-erfgoed (*Versie 5*) en `elastic-ceo/docs/taalanalyse.md`.
 
@@ -102,6 +102,23 @@ De taalanalyse van `Archeologie-sdo-abr` is die van `Erfgoed-sdo-nl3`. Daarin sp
 
 Om dit live te zetten:
 
+**Live sinds 21 oktober 2026.** `Archeologie-sdo-nl5` draait met evenveel documenten als `Archeologie-sdo-abr` (1.138.052). Met de query van het zoekveld Alles, op de hele index:
+
+| Zoekvraag | `-abr` | `-nl5` |
+|---|---:|---:|
+| `terp` | 39.948 | 24.013 |
+| `terpen` | 37.601 | 24.013 |
+| `Kapelle` | 2.022 | 499 |
+| `paalgaten` | 893 | 8.833 |
+| `urnenvelden` | 58 | 2.904 |
+| `crematiegraf` | 1.320 | 1.667 |
+| `keramiek` | 238.799 | 262.886 |
+| `kasteel` | 9.803 | 9.803 |
+
+`npm test` en `npm run test:live` gelukt; `DEFAULT_SERVICE` in `web/search.js` is `Archeologie-sdo-nl5`.
+
+Zo is het live gezet:
+
 1. Service aanmaken:
 
    ```bash
@@ -110,7 +127,7 @@ Om dit live te zetten:
 
 2. Als hij op *running* staat: de demo proberen met `?service=Archeologie-sdo-nl5`.
 3. In `web/search.js` `DEFAULT_SERVICE` op `Archeologie-sdo-nl5` zetten, `npm test` en `npm run test:live` draaien, en deze README bijwerken (de service bovenaan).
-4. Daarna `Archeologie-sdo-abr` verwijderen.
+4. Nog te doen: `Archeologie-sdo-abr` verwijderen, als de site live op `-nl5` draait.
 
 ## Wat de demo doet
 
@@ -172,8 +189,8 @@ npx wrangler deploy
 | Bestand | Rol |
 |---|---|
 | `archeologie/*.rq` | CONSTRUCT-queries voor de dataset (leidende versie; kopieën in `elastic-erfgoed/triply/construct/archeologie/`) |
-| `triply/elastic-service-archeologie.json` | Config van de Elasticsearch-service (`Archeologie-sdo-abr`, taalanalyse van nl3) |
-| `triply/elastic-service-archeologie-nl5.json`, `triply/maak-nl5.mjs` | Dezelfde config met de gedeelde taalanalyse (`Archeologie-sdo-nl5`, voorbereid), en het script dat hem maakt |
+| `triply/elastic-service-archeologie-nl5.json`, `triply/maak-nl5.mjs` | Config van de service die de demo gebruikt (`Archeologie-sdo-nl5`, gedeelde taalanalyse), en het script dat hem maakt |
+| `triply/elastic-service-archeologie.json` | Vorige config (`Archeologie-sdo-abr`, taalanalyse van nl3); basis voor `-nl5` |
 | `triply/nl-analyse.json` | De gedeelde Nederlandse analyse (kopie; bron is `elastic-ceo/triply/nl-analyse.json`) |
 | `web/search.js` | Velden, soorten, standaardfilter, datering, queryopbouw (zoeken, context, facetten, relaties, erfgoed-sdo), URL, uitleg, CSV, service |
 | `web/app.js` | Interface: resultaten met relaties, facetten, context, kaart, export |
